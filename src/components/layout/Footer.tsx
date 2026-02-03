@@ -83,9 +83,12 @@ export function Footer() {
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Terms
               </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                About
+              </Link>
+              <Link to="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Contact
-              </a>
+              </Link>
             </div>
           </div>
         </div>
