@@ -63,7 +63,7 @@ const features = [
   {
     icon: Users,
     title: "All Levels",
-    description: "From Class 6 to working professionals - we cover everyone",
+    description: "From Class 1 to working professionals - we cover everyone",
     color: "text-info",
     bgColor: "bg-info/10",
   },

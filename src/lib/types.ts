@@ -1,4 +1,5 @@
 export type UserLevel = 
+  | "primary"
   | "school" 
   | "intermediate" 
   | "degree" 
@@ -14,6 +15,8 @@ export type AIMode =
 
 export type Language = "english" | "hindi" | "telugu";
 
+export type AppRole = "admin" | "founder" | "teacher" | "student";
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -22,10 +25,15 @@ export interface Message {
 }
 
 export interface UserProfile {
-  level: UserLevel;
-  preferredLanguage: Language;
-  subjects: string[];
-  aiMode: AIMode;
+  id: string;
+  user_id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  user_level: UserLevel;
+  preferred_language: Language;
+  university: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Subject {
@@ -38,6 +46,7 @@ export interface Subject {
 }
 
 export const USER_LEVELS: { id: UserLevel; name: string; description: string; icon: string }[] = [
+  { id: "primary", name: "Primary (1-5)", description: "Class 1 to 5 students", icon: "🌟" },
   { id: "school", name: "School (6-10)", description: "Class 6 to 10 students", icon: "🎒" },
   { id: "intermediate", name: "Intermediate", description: "+1 / +2 / Inter students", icon: "📚" },
   { id: "degree", name: "Degree", description: "BA / BSc / BCom / BTech", icon: "🎓" },
@@ -54,6 +63,12 @@ export const AI_MODES: { id: AIMode; name: string; description: string; icon: st
 ];
 
 export const SUBJECTS: Subject[] = [
+  // Primary level
+  { id: "primary-maths", name: "Basic Maths", icon: "🔢", category: "academics", description: "Numbers, shapes & fun math", availableFor: ["primary"] },
+  { id: "primary-evs", name: "EVS", icon: "🌱", category: "academics", description: "Environment & Science basics", availableFor: ["primary"] },
+  { id: "primary-english", name: "English", icon: "📖", category: "language", description: "ABC, stories & reading", availableFor: ["primary"] },
+  { id: "primary-hindi", name: "Hindi", icon: "🇮🇳", category: "language", description: "हिंदी अक्षर और कहानियाँ", availableFor: ["primary"] },
+  
   // Academics
   { id: "maths", name: "Mathematics", icon: "📐", category: "academics", description: "Algebra, Calculus, Geometry & more", availableFor: ["school", "intermediate", "degree", "pg"] },
   { id: "physics", name: "Physics", icon: "⚛️", category: "academics", description: "Mechanics, Optics, Modern Physics", availableFor: ["school", "intermediate", "degree", "pg"] },
@@ -77,4 +92,13 @@ export const SUBJECTS: Subject[] = [
   { id: "english", name: "English", icon: "🇬🇧", category: "language", description: "Grammar, Communication, Writing", availableFor: ["school", "intermediate", "degree", "pg", "jobseeker", "professional"] },
   { id: "hindi", name: "Hindi", icon: "🇮🇳", category: "language", description: "हिंदी सीखें और सुधारें", availableFor: ["school", "intermediate", "degree", "pg", "jobseeker", "professional"] },
   { id: "telugu", name: "Telugu", icon: "🏛️", category: "language", description: "తెలుగు నేర్చుకోండి", availableFor: ["school", "intermediate", "degree", "pg", "jobseeker", "professional"] },
+];
+
+export const UNIVERSITIES = [
+  { id: "jntu", name: "JNTU Hyderabad", state: "Telangana" },
+  { id: "ou", name: "Osmania University", state: "Telangana" },
+  { id: "ku", name: "Kakatiya University", state: "Telangana" },
+  { id: "anu", name: "Acharya Nagarjuna University", state: "Andhra Pradesh" },
+  { id: "svu", name: "Sri Venkateswara University", state: "Andhra Pradesh" },
+  { id: "au", name: "Andhra University", state: "Andhra Pradesh" },
 ];
