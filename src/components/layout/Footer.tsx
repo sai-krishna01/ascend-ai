@@ -51,15 +51,15 @@ export function Footer() {
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                <a href="mailto:support@mentorai.in" className="hover:text-foreground transition-colors">support@mentorai.in</a>
+                <a href="mailto:support@mentorai.in" className="hover:text-foreground transition-colors">dadisaikrishna.dev@gmail.com</a>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4" />
-                <a href="tel:+919876543210" className="hover:text-foreground transition-colors">+91 98765 43210</a>
+                <a href="tel:+919876543210" className="hover:text-foreground transition-colors">+91 7036220910</a>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 mt-0.5" />
-                <span>Hyderabad, Telangana, India</span>
+                <span>maqdumpur,karimnagar, Telangana, India</span>
               </li>
             </ul>
           </div>
