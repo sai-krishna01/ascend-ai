@@ -134,7 +134,7 @@ export default function Contact() {
                 <CardContent className="space-y-6">
                   <div>
                     <h3 className="font-medium mb-2">Email Support</h3>
-                    <p className="text-muted-foreground">support@mentorai.com</p>
+                    <p className="text-muted-foreground">dadisaikrishna.dev@gmail.com</p>
                   </div>
                   <div>
                     <h3 className="font-medium mb-2">Response Time</h3>
