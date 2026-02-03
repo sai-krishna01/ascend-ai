@@ -8,12 +8,11 @@ import { ModeSelector } from "@/components/landing/ModeSelector";
 import { SubjectGrid } from "@/components/landing/SubjectGrid";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { ChatInterface } from "@/components/chat/ChatInterface";
-import { Dashboard } from "@/components/dashboard/Dashboard";
 import { Button } from "@/components/ui/button";
 import { UserLevel, AIMode, SUBJECTS } from "@/lib/types";
 import { ArrowRight, MessageCircle } from "lucide-react";
 
-type View = "landing" | "onboarding" | "chat" | "dashboard";
+type View = "landing" | "chat";
 
 const Index = () => {
   const [view, setView] = useState<View>("landing");
@@ -23,8 +22,6 @@ const Index = () => {
   const [chatSubject, setChatSubject] = useState<string | undefined>();
 
   const handleGetStarted = useCallback(() => {
-    setView("onboarding");
-    // Scroll to level selector
     setTimeout(() => {
       document.getElementById("level-selector")?.scrollIntoView({ behavior: "smooth" });
     }, 100);
@@ -46,7 +43,7 @@ const Index = () => {
   }, [selectedLevel]);
 
   const handleBackFromChat = useCallback(() => {
-    setView("onboarding");
+    setView("landing");
   }, []);
 
   const getSubjectName = (id: string) => {
@@ -122,27 +119,28 @@ const Index = () => {
                 <motion.section
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="py-16 bg-gradient-to-b from-background to-secondary/30"
+                  className="py-12 sm:py-16 bg-gradient-to-b from-background to-secondary/30"
                 >
                   <div className="container px-4 text-center">
-                    <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-4">
                       Ready to Start Learning?
                     </h2>
-                    <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
+                    <p className="text-muted-foreground mb-8 max-w-xl mx-auto text-sm sm:text-base">
                       Your AI {selectedMode === "teacher" ? "Teacher" : selectedMode === "mentor" ? "Mentor" : selectedMode === "interviewer" ? "Interviewer" : "Examiner"} is ready to help you learn and grow.
                     </p>
                     
-                    <div className="flex flex-wrap gap-3 justify-center mb-6">
+                    <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mb-6">
                       {selectedSubjects.length > 0 ? (
-                        selectedSubjects.map(subjectId => (
+                        selectedSubjects.slice(0, 3).map(subjectId => (
                           <Button
                             key={subjectId}
                             variant="secondary"
+                            size="sm"
                             onClick={() => handleStartChat(subjectId)}
-                            className="gap-2"
+                            className="gap-2 text-xs sm:text-sm"
                           >
-                            <MessageCircle className="w-4 h-4" />
-                            Start with {getSubjectName(subjectId)}
+                            <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                            {getSubjectName(subjectId)}
                           </Button>
                         ))
                       ) : null}

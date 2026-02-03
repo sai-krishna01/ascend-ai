@@ -103,10 +103,10 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex flex-wrap gap-3 justify-center"
+            className="flex flex-wrap gap-2 sm:gap-3 justify-center"
           >
             {[
-              { icon: BookOpen, text: "Class 6 to PG" },
+              { icon: BookOpen, text: "Class 1 to PG" },
               { icon: Brain, text: "AI Teacher" },
               { icon: Target, text: "Interview Prep" },
               { icon: Briefcase, text: "Career Guidance" },
@@ -117,10 +117,10 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, delay: 0.5 + index * 0.1 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-card shadow-soft border"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-card shadow-soft border text-xs sm:text-sm"
               >
-                <item.icon className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">{item.text}</span>
+                <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
+                <span className="font-medium">{item.text}</span>
               </motion.div>
             ))}
           </motion.div>

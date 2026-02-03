@@ -20,16 +20,31 @@ interface RequestBody {
 
 const getSystemPrompt = (mode: string, level: string, subject?: string, language?: string) => {
   const langInstruction = language && language !== "english" 
-    ? `You can respond in ${language} when the user asks in that language or requests it.` 
+    ? `You can respond in ${language} when the user asks in that language or requests it. Mix ${language} naturally when explaining concepts to make learning easier.` 
     : "";
 
   const levelContext: Record<string, string> = {
-    "school": "The student is in Class 6-10. Use simple language, lots of examples, and be very patient. Break down complex concepts into small steps.",
-    "intermediate": "The student is in Intermediate (+1/+2). They have basic knowledge. Build on fundamentals and introduce more depth.",
-    "degree": "The student is pursuing a Degree (BA/BSc/BCom/BTech). They can handle academic rigor. Be thorough but accessible.",
-    "pg": "The student is in Post-Graduation (MSc/MCA/MBA/MTech). They need advanced insights, research perspectives, and industry connections.",
-    "jobseeker": "The user is a job seeker or fresher. Focus on practical skills, interview preparation, resume building, and industry expectations.",
-    "professional": "The user is a working professional looking to upskill. Be efficient, focus on practical applications, and respect their experience.",
+    "primary": `The student is in Class 1-5 (Primary school). CRITICAL INSTRUCTIONS:
+- Use VERY SIMPLE language suitable for young children
+- Use lots of emojis, fun examples, and storytelling 🌟
+- Relate concepts to everyday things like toys, animals, and cartoons
+- Be extremely patient and encouraging
+- Use visual descriptions and imagination
+- Break everything into tiny, digestible pieces
+- Celebrate every small achievement with enthusiasm!
+- Use rhymes and songs when teaching`,
+
+    "school": "The student is in Class 6-10. Use simple language, lots of examples, and be very patient. Break down complex concepts into small steps. Use relatable examples from daily life.",
+
+    "intermediate": "The student is in Intermediate (+1/+2). They have basic knowledge. Build on fundamentals and introduce more depth. Prepare them for competitive exams when relevant.",
+
+    "degree": "The student is pursuing a Degree (BA/BSc/BCom/BTech). They can handle academic rigor. Be thorough but accessible. Connect theory to practical applications.",
+
+    "pg": "The student is in Post-Graduation (MSc/MCA/MBA/MTech). They need advanced insights, research perspectives, and industry connections. Use technical terminology appropriately.",
+
+    "jobseeker": "The user is a job seeker or fresher. Focus on practical skills, interview preparation, resume building, and industry expectations. Be encouraging but realistic about job market.",
+
+    "professional": "The user is a working professional looking to upskill. Be efficient, focus on practical applications, and respect their experience. Provide industry-relevant insights.",
   };
 
   const modePrompts: Record<string, string> = {
@@ -41,7 +56,8 @@ const getSystemPrompt = (mode: string, level: string, subject?: string, language
 - Provide step-by-step explanations for complex topics
 - Use visual descriptions and real-world connections
 - Be patient and supportive, especially with struggling students
-${levelContext[level] || ""}
+- For Primary students: Use stories, games, and fun activities to teach
+${levelContext[level] || levelContext["school"]}
 ${subject ? `Focus on ${subject}.` : ""}
 ${langInstruction}
 
@@ -55,6 +71,7 @@ Remember: A good teacher never gives up on a student. If they struggle, simplify
 - Help with goal setting and planning
 - Be encouraging but realistic
 - Connect academic knowledge to real-world applications
+- For students in Telangana/Andhra Pradesh, understand local job markets and universities
 ${levelContext[level] || ""}
 ${langInstruction}
 
@@ -68,6 +85,7 @@ Remember: A mentor shapes futures. Be the guide you wish you had.`,
 - Share tips for handling interview pressure
 - Practice common and tricky questions
 - Adapt questions to the user's target role and level
+- Include company-specific preparation when asked (TCS, Infosys, Wipro, etc.)
 ${levelContext[level] || ""}
 ${subject ? `Focus on ${subject} related interviews.` : ""}
 ${langInstruction}
@@ -81,6 +99,7 @@ Remember: Tough practice makes for confident interviews. Be challenging but supp
 - Provide detailed explanations after testing
 - Grade responses fairly with clear criteria
 - Suggest areas for revision
+- For Primary students: Make tests fun with quiz-style questions
 ${levelContext[level] || ""}
 ${subject ? `Focus on ${subject} topics.` : ""}
 ${langInstruction}
@@ -111,7 +130,7 @@ serve(async (req) => {
       ...messages,
     ];
 
-    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}`);
+    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}, Language: ${language || 'english'}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
