@@ -11,6 +11,10 @@ export interface AISettings {
   ai_for_students: boolean;
   ai_for_teachers: boolean;
   ai_for_free_plan: boolean;
+  file_upload_enabled: boolean;
+  link_upload_enabled: boolean;
+  custom_topics_enabled: boolean;
+  custom_subjects_enabled: boolean;
 }
 
 const defaultSettings: AISettings = {
@@ -21,6 +25,10 @@ const defaultSettings: AISettings = {
   ai_for_students: true,
   ai_for_teachers: true,
   ai_for_free_plan: true,
+  file_upload_enabled: true,
+  link_upload_enabled: true,
+  custom_topics_enabled: true,
+  custom_subjects_enabled: true,
 };
 
 export function useAISettings() {
@@ -36,6 +44,24 @@ export function useAISettings() {
 
   // Check if AI is globally enabled
   const isAIGloballyEnabled = isAIEnabled;
+
+  // Check if file uploads are enabled
+  const canUploadFiles = useCallback(() => {
+    if (role === "admin" || role === "founder") return true;
+    return aiSettings.file_upload_enabled !== false;
+  }, [aiSettings, role]);
+
+  // Check if link uploads are enabled
+  const canUploadLinks = useCallback(() => {
+    if (role === "admin" || role === "founder") return true;
+    return aiSettings.link_upload_enabled !== false;
+  }, [aiSettings, role]);
+
+  // Check if custom topics are enabled
+  const canUseCustomTopics = useCallback(() => {
+    if (role === "admin" || role === "founder") return true;
+    return aiSettings.custom_topics_enabled !== false;
+  }, [aiSettings, role]);
 
   // Check if AI Mentor is accessible for current user
   const canAccessAIMentor = useCallback(() => {
@@ -138,5 +164,8 @@ export function useAISettings() {
     canAccessAINotes,
     canAccessAITools,
     canGuestAccessAI,
+    canUploadFiles,
+    canUploadLinks,
+    canUseCustomTopics,
   };
 }

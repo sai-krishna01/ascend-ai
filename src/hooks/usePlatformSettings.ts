@@ -15,6 +15,10 @@ interface AISettings {
   ai_for_students: boolean;
   ai_for_teachers: boolean;
   ai_for_free_plan: boolean;
+  file_upload_enabled: boolean;
+  link_upload_enabled: boolean;
+  custom_topics_enabled: boolean;
+  custom_subjects_enabled: boolean;
 }
 
 const defaultPlatformSettings: PlatformSettings = {
@@ -31,6 +35,10 @@ const defaultAISettings: AISettings = {
   ai_for_students: true,
   ai_for_teachers: true,
   ai_for_free_plan: true,
+  file_upload_enabled: true,
+  link_upload_enabled: true,
+  custom_topics_enabled: true,
+  custom_subjects_enabled: true,
 };
 
 export function usePlatformSettings() {

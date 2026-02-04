@@ -40,7 +40,7 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     console.log(`Fetching content from: ${url}`);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
     
     const response = await fetch(url, {
       headers: {
@@ -62,9 +62,8 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     
     // Handle PDF files
     if (contentType.includes("application/pdf") || url.toLowerCase().endsWith(".pdf")) {
-      // We can't parse PDF directly, but we acknowledge it
       return { 
-        content: `[PDF Document: ${url}]\nThis is a PDF file. Please describe the key topics or questions you have about this document, and I'll help explain them based on the subject matter.`, 
+        content: `[PDF Document: ${url}]\nThis is a PDF file. I can help you understand the topics mentioned. Please describe what you need help with or paste any specific text from the document.`, 
         type: "pdf",
         success: true 
       };
@@ -123,8 +122,8 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
         .trim();
       
       // Limit content length
-      if (textContent.length > 8000) {
-        textContent = textContent.slice(0, 8000) + "... [content truncated]";
+      if (textContent.length > 12000) {
+        textContent = textContent.slice(0, 12000) + "... [content truncated]";
       }
       
       const result = [
@@ -139,14 +138,14 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     // Handle plain text
     if (contentType.includes("text/")) {
       const text = await response.text();
-      const limitedText = text.length > 8000 ? text.slice(0, 8000) + "... [content truncated]" : text;
+      const limitedText = text.length > 12000 ? text.slice(0, 12000) + "... [content truncated]" : text;
       return { content: limitedText, type: "text", success: true };
     }
     
     // Handle JSON
     if (contentType.includes("application/json")) {
       const text = await response.text();
-      const limitedText = text.length > 5000 ? text.slice(0, 5000) + "... [content truncated]" : text;
+      const limitedText = text.length > 8000 ? text.slice(0, 8000) + "... [content truncated]" : text;
       return { content: `\`\`\`json\n${limitedText}\n\`\`\``, type: "json", success: true };
     }
     
@@ -177,7 +176,7 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-// Get YouTube video info (title from URL if possible)
+// Get YouTube video info
 function getYouTubeInfo(url: string, providedTitle?: string): string {
   const videoId = extractYouTubeId(url);
   if (!videoId) return "";
@@ -251,6 +250,25 @@ const getSystemPrompt = (mode: string, level: string, subject?: string, language
 - Discuss current trends and technologies`,
   };
 
+  const autonomousInstructions = `
+AUTONOMOUS AI CAPABILITIES - You should proactively:
+1. **Suggest Related Topics**: After answering, suggest 2-3 related topics the student might want to explore
+2. **Identify Knowledge Gaps**: If you notice misunderstandings, address them proactively
+3. **Recommend Learning Paths**: Suggest what to learn next based on the conversation
+4. **Offer Practice Problems**: Proactively offer to quiz the student or provide practice questions
+5. **Adapt Difficulty**: If the student struggles, simplify. If they excel, increase complexity
+6. **Encourage Questions**: Prompt students to ask follow-up questions
+7. **Make Connections**: Link concepts to real-world applications and other subjects
+8. **Provide Study Tips**: Share memory techniques, mnemonics, or study strategies when relevant
+9. **Check Understanding**: Periodically ask if the explanation was clear and offer alternatives
+10. **Be Encouraging**: Celebrate progress and motivate during difficult topics
+
+FORMAT YOUR RESPONSES WELL:
+- Use markdown formatting (headings, bold, lists, code blocks)
+- Keep paragraphs short and scannable
+- Use emojis sparingly but effectively to highlight key points
+- Include visual aids through ASCII art or descriptive language when helpful`;
+
   const modePrompts: Record<string, string> = {
     "teacher": `You are MentorAI, an expert teacher and educator with deep knowledge across subjects. Your role is to:
 
@@ -272,6 +290,7 @@ CONTENT ANALYSIS:
 ${levelContext[level] || levelContext["school"]}
 ${subject ? `PRIMARY SUBJECT FOCUS: ${subject}. Relate all explanations to this subject when possible.` : ""}
 ${langInstruction}
+${autonomousInstructions}
 
 Remember: A good teacher never gives up on a student. If they struggle, simplify further and try different approaches.`,
 
@@ -292,6 +311,7 @@ CONTENT ANALYSIS:
 
 ${levelContext[level] || ""}
 ${langInstruction}
+${autonomousInstructions}
 
 Remember: A mentor shapes futures. Be the guide you wish you had.`,
 
@@ -313,6 +333,7 @@ CONTENT ANALYSIS:
 ${levelContext[level] || ""}
 ${subject ? `FOCUS AREA: ${subject} related interviews and questions.` : ""}
 ${langInstruction}
+${autonomousInstructions}
 
 Remember: Tough practice makes for confident interviews. Be challenging but supportive.`,
 
@@ -334,6 +355,7 @@ CONTENT ANALYSIS:
 ${levelContext[level] || ""}
 ${subject ? `SUBJECT FOCUS: ${subject} examination questions.` : ""}
 ${langInstruction}
+${autonomousInstructions}
 
 Remember: Exams reveal what we truly know. Be thorough but educational.`,
   };
@@ -352,7 +374,10 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       console.error("LOVABLE_API_KEY is not configured");
-      throw new Error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Build rich context from attachments
@@ -445,7 +470,8 @@ serve(async (req) => {
         model: "google/gemini-3-flash-preview",
         messages: allMessages,
         stream: true,
-        max_tokens: 4096,
+        max_tokens: 8192,
+        temperature: 0.7,
       }),
     });
 
@@ -454,31 +480,41 @@ serve(async (req) => {
       console.error(`AI gateway error: ${response.status} - ${errorText}`);
       
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please contact support." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted. Please try again later." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-      return new Response(JSON.stringify({ error: "Failed to get AI response. Please try again." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+      return new Response(
+        JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
+    // Stream the response
     return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
   } catch (error) {
     console.error("AI Mentor error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    
+    return new Response(
+      JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
