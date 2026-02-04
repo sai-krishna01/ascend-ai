@@ -6,12 +6,13 @@ import { GroupChatList } from "@/components/chat/GroupChatList";
 import { GroupChatInterface } from "@/components/chat/GroupChatInterface";
 import { useAuth } from "@/hooks/useAuth";
 import { useAISettings } from "@/hooks/useAISettings";
-import { Loader2 } from "lucide-react";
+import { Loader2, Ban } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function GroupChats() {
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
-  const { isLoading: settingsLoading, canAccessAIGroupChat } = useAISettings();
+  const { isLoading: authLoading, isAuthenticated, role } = useAuth();
+  const { isLoading: settingsLoading, canAccessAIGroupChat, isAIGloballyEnabled } = useAISettings();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   if (authLoading || settingsLoading) {
@@ -26,6 +27,10 @@ export default function GroupChats() {
     return <Navigate to="/auth" replace />;
   }
 
+  // Check AI access for non-admin users
+  const aiEnabled = canAccessAIGroupChat();
+  const isAdmin = role === "admin" || role === "founder";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
@@ -36,8 +41,8 @@ export default function GroupChats() {
             <h1 className="text-2xl sm:text-3xl font-bold">Group Chats</h1>
             <p className="text-muted-foreground">
               Collaborate with classmates and get AI assistance
-              {!canAccessAIGroupChat() && (
-                <span className="text-orange-500 ml-2">(AI assistance is currently disabled)</span>
+              {!aiEnabled && !isAdmin && (
+                <span className="text-destructive ml-2">(AI assistance is currently disabled)</span>
               )}
             </p>
           </div>
@@ -54,7 +59,7 @@ export default function GroupChats() {
                 <GroupChatInterface 
                   groupId={selectedGroupId} 
                   onBack={() => setSelectedGroupId(null)}
-                  aiEnabled={canAccessAIGroupChat()}
+                  aiEnabled={aiEnabled}
                 />
               ) : (
                 <Card className="h-full flex items-center justify-center">

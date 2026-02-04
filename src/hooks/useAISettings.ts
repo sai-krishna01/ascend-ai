@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { usePlatformSettings } from "./usePlatformSettings";
 
 export interface AISettings {
   ai_mentor_enabled: boolean;
@@ -24,98 +25,118 @@ const defaultSettings: AISettings = {
 
 export function useAISettings() {
   const { role, isAuthenticated } = useAuth();
-  const [settings, setSettings] = useState<AISettings>(defaultSettings);
+  const { aiSettings, isAIEnabled, isLoading: platformLoading } = usePlatformSettings();
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchSettings = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("platform_settings")
-        .select("key, value")
-        .eq("key", "ai_controls")
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        const aiControls = data.value as unknown as AISettings;
-        setSettings({ ...defaultSettings, ...aiControls });
-      }
-    } catch (error) {
-      console.error("Error fetching AI settings:", error);
-    } finally {
+  useEffect(() => {
+    if (!platformLoading) {
       setIsLoading(false);
     }
-  }, []);
+  }, [platformLoading]);
 
-  useEffect(() => {
-    fetchSettings();
-
-    // Subscribe to changes
-    const channel = supabase
-      .channel("ai-settings-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "platform_settings",
-          filter: "key=eq.ai_controls",
-        },
-        () => {
-          fetchSettings();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchSettings]);
+  // Check if AI is globally enabled
+  const isAIGloballyEnabled = isAIEnabled;
 
   // Check if AI Mentor is accessible for current user
   const canAccessAIMentor = useCallback(() => {
-    if (!settings.ai_mentor_enabled) return false;
+    // If global AI is disabled, no one except admins can access
+    if (!isAIGloballyEnabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
+    // If AI mentor is specifically disabled
+    if (!aiSettings.ai_mentor_enabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
+    // Admins always have access
     if (role === "admin" || role === "founder") return true;
-    if (role === "teacher" && !settings.ai_for_teachers) return false;
-    if (role === "student" && !settings.ai_for_students) return false;
+    
+    // Check role-based access
+    if (role === "teacher" && !aiSettings.ai_for_teachers) return false;
+    if (role === "student" && !aiSettings.ai_for_students) return false;
+    
+    // Check free plan access (for non-authenticated or basic users)
+    if (!isAuthenticated && !aiSettings.ai_for_free_plan) return false;
+    
     return true;
-  }, [settings, role]);
+  }, [aiSettings, role, isAIGloballyEnabled, isAuthenticated]);
 
   // Check if AI Group Chat is accessible
   const canAccessAIGroupChat = useCallback(() => {
-    if (!settings.ai_group_chat_enabled) return false;
+    if (!isAIGloballyEnabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
+    if (!aiSettings.ai_group_chat_enabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
     if (role === "admin" || role === "founder") return true;
-    if (role === "teacher" && !settings.ai_for_teachers) return false;
-    if (role === "student" && !settings.ai_for_students) return false;
+    if (role === "teacher" && !aiSettings.ai_for_teachers) return false;
+    if (role === "student" && !aiSettings.ai_for_students) return false;
+    
     return true;
-  }, [settings, role]);
+  }, [aiSettings, role, isAIGloballyEnabled]);
 
   // Check if AI Notes is accessible
   const canAccessAINotes = useCallback(() => {
-    if (!settings.ai_notes_enabled) return false;
+    if (!isAIGloballyEnabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
+    if (!aiSettings.ai_notes_enabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
     if (role === "admin" || role === "founder") return true;
-    if (role === "teacher" && !settings.ai_for_teachers) return false;
-    if (role === "student" && !settings.ai_for_students) return false;
+    if (role === "teacher" && !aiSettings.ai_for_teachers) return false;
+    if (role === "student" && !aiSettings.ai_for_students) return false;
+    
     return true;
-  }, [settings, role]);
+  }, [aiSettings, role, isAIGloballyEnabled]);
 
   // Check if AI Tools is accessible
   const canAccessAITools = useCallback(() => {
-    if (!settings.ai_tools_enabled) return false;
+    if (!isAIGloballyEnabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
+    if (!aiSettings.ai_tools_enabled) {
+      if (role === "admin" || role === "founder") return true;
+      return false;
+    }
+    
     if (role === "admin" || role === "founder") return true;
-    if (role === "teacher" && !settings.ai_for_teachers) return false;
-    if (role === "student" && !settings.ai_for_students) return false;
+    if (role === "teacher" && !aiSettings.ai_for_teachers) return false;
+    if (role === "student" && !aiSettings.ai_for_students) return false;
+    
     return true;
-  }, [settings, role]);
+  }, [aiSettings, role, isAIGloballyEnabled]);
+
+  // Check if guest AI access is allowed
+  const canGuestAccessAI = useCallback(() => {
+    if (!isAIGloballyEnabled) return false;
+    if (!aiSettings.ai_mentor_enabled) return false;
+    if (!aiSettings.ai_for_free_plan) return false;
+    return true;
+  }, [aiSettings, isAIGloballyEnabled]);
 
   return {
-    settings,
+    settings: aiSettings,
     isLoading,
+    isAIGloballyEnabled,
     canAccessAIMentor,
     canAccessAIGroupChat,
     canAccessAINotes,
     canAccessAITools,
-    refetch: fetchSettings,
+    canGuestAccessAI,
   };
 }

@@ -27,10 +27,70 @@ interface RequestBody {
   level: string;
   subject?: string;
   language?: string;
+  isGuest?: boolean;
   attachments?: {
     files?: FileAttachment[];
     links?: LinkAttachment[];
   };
+}
+
+// Helper to fetch and extract text from URLs
+async function fetchUrlContent(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MentorAI/1.0)",
+      },
+    });
+    
+    if (!response.ok) {
+      return `[Could not fetch content from ${url} - Status: ${response.status}]`;
+    }
+    
+    const contentType = response.headers.get("content-type") || "";
+    
+    // Handle different content types
+    if (contentType.includes("application/pdf")) {
+      return `[PDF Document from ${url} - Please describe what you need help with from this PDF]`;
+    }
+    
+    if (contentType.includes("text/html")) {
+      const html = await response.text();
+      // Basic HTML to text extraction
+      const textContent = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 5000); // Limit content length
+      return textContent || `[Content from ${url}]`;
+    }
+    
+    if (contentType.includes("text/")) {
+      const text = await response.text();
+      return text.slice(0, 5000);
+    }
+    
+    return `[Binary content from ${url} - Type: ${contentType}]`;
+  } catch (error) {
+    console.error(`Error fetching ${url}:`, error);
+    return `[Failed to fetch content from ${url}]`;
+  }
+}
+
+// Extract YouTube video ID
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 const getSystemPrompt = (mode: string, level: string, subject?: string, language?: string) => {
@@ -72,6 +132,7 @@ const getSystemPrompt = (mode: string, level: string, subject?: string, language
 - Use visual descriptions and real-world connections
 - Be patient and supportive, especially with struggling students
 - For Primary students: Use stories, games, and fun activities to teach
+- IMPORTANT: When files or links are shared, carefully analyze their content and provide relevant explanations
 ${levelContext[level] || levelContext["school"]}
 ${subject ? `Focus on ${subject}.` : ""}
 ${langInstruction}
@@ -87,6 +148,7 @@ Remember: A good teacher never gives up on a student. If they struggle, simplify
 - Be encouraging but realistic
 - Connect academic knowledge to real-world applications
 - For students in Telangana/Andhra Pradesh, understand local job markets and universities
+- IMPORTANT: When files or links are shared (resumes, job postings, etc.), provide specific feedback
 ${levelContext[level] || ""}
 ${langInstruction}
 
@@ -101,6 +163,7 @@ Remember: A mentor shapes futures. Be the guide you wish you had.`,
 - Practice common and tricky questions
 - Adapt questions to the user's target role and level
 - Include company-specific preparation when asked (TCS, Infosys, Wipro, etc.)
+- IMPORTANT: When resumes or job descriptions are shared, tailor your questions accordingly
 ${levelContext[level] || ""}
 ${subject ? `Focus on ${subject} related interviews.` : ""}
 ${langInstruction}
@@ -115,6 +178,7 @@ Remember: Tough practice makes for confident interviews. Be challenging but supp
 - Grade responses fairly with clear criteria
 - Suggest areas for revision
 - For Primary students: Make tests fun with quiz-style questions
+- IMPORTANT: When study materials are shared, create questions based on that content
 ${levelContext[level] || ""}
 ${subject ? `Focus on ${subject} topics.` : ""}
 ${langInstruction}
@@ -131,29 +195,63 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, level, subject, language, attachments } = await req.json() as RequestBody;
+    const { messages, mode, level, subject, language, attachments, isGuest } = await req.json() as RequestBody;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build context from attachments
+    // Build rich context from attachments
     let attachmentContext = "";
+    const processedContent: string[] = [];
+    
     if (attachments?.files && attachments.files.length > 0) {
-      attachmentContext += "\n\n## Attached Files (User has shared these for context):\n";
-      attachments.files.forEach((file, i) => {
-        attachmentContext += `${i + 1}. **${file.name}** (${file.type}) - URL: ${file.url}\n`;
-      });
-      attachmentContext += "\nPlease acknowledge these files and help the user with questions about them. If they are documents (PDF, DOC), summarize key points or answer questions about their content.";
+      attachmentContext += "\n\n## 📎 ATTACHED FILES - READ AND ANALYZE THESE:\n";
+      
+      for (let i = 0; i < attachments.files.length; i++) {
+        const file = attachments.files[i];
+        attachmentContext += `\n### File ${i + 1}: ${file.name} (${file.type})\n`;
+        
+        // Attempt to fetch and read file content
+        if (file.url) {
+          const content = await fetchUrlContent(file.url);
+          if (content && content.length > 50) {
+            attachmentContext += `**Content:**\n\`\`\`\n${content}\n\`\`\`\n`;
+            processedContent.push(`${file.name}: ${content.slice(0, 500)}...`);
+          } else {
+            attachmentContext += `**URL:** ${file.url}\n`;
+            attachmentContext += `*Note: This is a ${file.type} file. Ask the user to describe its contents if you need more details.*\n`;
+          }
+        }
+      }
+      
+      attachmentContext += "\n**INSTRUCTION:** Carefully read and analyze the above file contents. Answer the user's questions based on this content. If the content couldn't be fully extracted, ask clarifying questions.\n";
     }
     
     if (attachments?.links && attachments.links.length > 0) {
-      attachmentContext += "\n\n## Attached Links (User has shared these for context):\n";
-      attachments.links.forEach((link, i) => {
-        attachmentContext += `${i + 1}. [${link.title}](${link.url})\n`;
-      });
-      attachmentContext += "\nPlease acknowledge these links. If they are YouTube videos, help explain the topic. For other resources, help the user understand or learn from them.";
+      attachmentContext += "\n\n## 🔗 SHARED LINKS - ANALYZE THESE:\n";
+      
+      for (let i = 0; i < attachments.links.length; i++) {
+        const link = attachments.links[i];
+        attachmentContext += `\n### Link ${i + 1}: ${link.title}\n`;
+        attachmentContext += `**URL:** ${link.url}\n`;
+        
+        // Check for YouTube
+        const ytId = extractYouTubeId(link.url);
+        if (ytId) {
+          attachmentContext += `**Type:** YouTube Video (ID: ${ytId})\n`;
+          attachmentContext += `*This is a YouTube video. Help the user understand the topic of this video based on its title and context.*\n`;
+        } else {
+          // Try to fetch content from the link
+          const content = await fetchUrlContent(link.url);
+          if (content && content.length > 100) {
+            attachmentContext += `**Page Content:**\n${content.slice(0, 3000)}\n`;
+          }
+        }
+      }
+      
+      attachmentContext += "\n**INSTRUCTION:** Use the information from these links to answer the user's questions. Provide explanations based on the linked content.\n";
     }
 
     const systemPrompt = getSystemPrompt(mode, level, subject, language) + attachmentContext;
@@ -164,7 +262,7 @@ serve(async (req) => {
     ];
 
     const hasAttachments = (attachments?.files?.length || 0) + (attachments?.links?.length || 0);
-    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}, Language: ${language || 'english'}, Attachments: ${hasAttachments}`);
+    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}, Language: ${language || 'english'}, Attachments: ${hasAttachments}, Guest: ${isGuest || false}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
