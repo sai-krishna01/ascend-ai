@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,8 @@ import {
   Trash2,
   Play,
   Users,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -36,15 +38,16 @@ interface UserDashboardProps {
 
 export function UserDashboard({ onResumeSession }: UserDashboardProps) {
   const { user, profile } = useAuth();
-  const { sessions, deleteSession, isLoading: sessionsLoading } = useChatSessions();
+  const { sessions, deleteSession, isLoading: sessionsLoading, refetch } = useChatSessions();
   const [progress, setProgress] = useState<LearningProgress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchProgress = useCallback(async () => {
     if (!user) return;
-
-    const fetchProgress = async () => {
+    
+    try {
       const { data, error } = await supabase
         .from("learning_progress")
         .select("*")
@@ -60,12 +63,43 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
       if (sessions.length > 0) {
         setTotalTimeSpent(sessions.length * 10);
       }
-
+    } catch (error) {
+      console.error("Error fetching progress:", error);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  }, [user, sessions.length]);
 
+  useEffect(() => {
     fetchProgress();
-  }, [user, sessions]);
+
+    // Subscribe to real-time progress updates
+    if (user?.id) {
+      const channel = supabase
+        .channel("learning-progress-updates")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "learning_progress",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => fetchProgress()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [fetchProgress, user?.id]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([fetchProgress(), refetch()]);
+    setIsRefreshing(false);
+  };
 
   const stats = [
     {
@@ -103,6 +137,14 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
       default: return "💬";
     }
   };
+
+  if (sessionsLoading && isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -185,11 +227,23 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
         {/* Recent Sessions - Now with Resume Functionality */}
         <Card className="glass border-white/10">
           <CardHeader className="pb-2 sm:pb-4">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
-              Recent Sessions
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Continue where you left off</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+                  Recent Sessions
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Continue where you left off</CardDescription>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2 sm:space-y-3">
             {sessionsLoading ? (

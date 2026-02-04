@@ -6,8 +6,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, Plus, Trash2, AlertCircle, AlertTriangle, Info, CheckCircle } from "lucide-react";
+import { Bell, Plus, Trash2, AlertCircle, AlertTriangle, Info, CheckCircle, Edit2, X, Save } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface SystemAlert {
   id: string;
@@ -29,6 +39,8 @@ interface AlertsManagerProps {
 
 export function AlertsManager({ alerts, onCreateAlert, onUpdateAlert, onDeleteAlert }: AlertsManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [newAlert, setNewAlert] = useState<{
     title: string;
     message: string;
@@ -42,6 +54,18 @@ export function AlertsManager({ alerts, onCreateAlert, onUpdateAlert, onDeleteAl
     type: "info",
     is_active: true,
     show_on_pages: ["all"],
+    expires_at: null,
+  });
+
+  const [editData, setEditData] = useState<{
+    title: string;
+    message: string;
+    type: "info" | "warning" | "error" | "success";
+    expires_at: string | null;
+  }>({
+    title: "",
+    message: "",
+    type: "info",
     expires_at: null,
   });
 
@@ -70,6 +94,36 @@ export function AlertsManager({ alerts, onCreateAlert, onUpdateAlert, onDeleteAl
       expires_at: null,
     });
     setIsCreating(false);
+  };
+
+  const startEditing = (alert: SystemAlert) => {
+    setEditingId(alert.id);
+    setEditData({
+      title: alert.title,
+      message: alert.message,
+      type: alert.type,
+      expires_at: alert.expires_at,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditData({ title: "", message: "", type: "info", expires_at: null });
+  };
+
+  const saveEditing = (id: string) => {
+    onUpdateAlert(id, {
+      title: editData.title,
+      message: editData.message,
+      type: editData.type,
+      expires_at: editData.expires_at,
+    });
+    setEditingId(null);
+  };
+
+  const handleDelete = (id: string) => {
+    onDeleteAlert(id);
+    setDeleteConfirmId(null);
   };
 
   return (
@@ -155,40 +209,122 @@ export function AlertsManager({ alerts, onCreateAlert, onUpdateAlert, onDeleteAl
         ) : (
           alerts.map((alert) => (
             <div key={alert.id} className="p-4 rounded-lg bg-secondary/50">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  {getAlertIcon(alert.type)}
-                  <div>
-                    <p className="font-medium">{alert.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{alert.message}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Created: {new Date(alert.created_at).toLocaleString()}
-                      {alert.expires_at && ` • Expires: ${new Date(alert.expires_at).toLocaleString()}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
+              {editingId === alert.id ? (
+                // Edit mode
+                <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`active-${alert.id}`} className="text-sm">Active</Label>
-                    <Switch
-                      id={`active-${alert.id}`}
-                      checked={alert.is_active}
-                      onCheckedChange={(checked) => onUpdateAlert(alert.id, { is_active: checked })}
+                    <Input
+                      value={editData.title}
+                      onChange={(e) => setEditData(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="Title"
+                      className="flex-1"
                     />
+                    <Select
+                      value={editData.type}
+                      onValueChange={(value: "info" | "warning" | "error" | "success") => 
+                        setEditData(prev => ({ ...prev, type: value }))
+                      }
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="info">Info</SelectItem>
+                        <SelectItem value="warning">Warning</SelectItem>
+                        <SelectItem value="error">Error</SelectItem>
+                        <SelectItem value="success">Success</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="destructive" 
-                    onClick={() => onDeleteAlert(alert.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <Textarea
+                    value={editData.message}
+                    onChange={(e) => setEditData(prev => ({ ...prev, message: e.target.value }))}
+                    placeholder="Message"
+                    rows={2}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="datetime-local"
+                      value={editData.expires_at ? new Date(editData.expires_at).toISOString().slice(0, 16) : ""}
+                      onChange={(e) => setEditData(prev => ({ 
+                        ...prev, 
+                        expires_at: e.target.value ? new Date(e.target.value).toISOString() : null 
+                      }))}
+                      className="flex-1"
+                    />
+                    <Button size="sm" variant="ghost" onClick={cancelEditing}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" onClick={() => saveEditing(alert.id)}>
+                      <Save className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                // View mode
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    {getAlertIcon(alert.type)}
+                    <div>
+                      <p className="font-medium">{alert.title}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{alert.message}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Created: {new Date(alert.created_at).toLocaleString()}
+                        {alert.expires_at && ` • Expires: ${new Date(alert.expires_at).toLocaleString()}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mr-2">
+                      <Label htmlFor={`active-${alert.id}`} className="text-sm">Active</Label>
+                      <Switch
+                        id={`active-${alert.id}`}
+                        checked={alert.is_active}
+                        onCheckedChange={(checked) => onUpdateAlert(alert.id, { is_active: checked })}
+                      />
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => startEditing(alert)}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="destructive" 
+                      onClick={() => setDeleteConfirmId(alert.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Alert</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this alert? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
