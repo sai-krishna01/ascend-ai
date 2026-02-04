@@ -18,17 +18,18 @@ export interface ChatMessage {
   session_id: string;
   role: "user" | "assistant";
   content: string;
+  reply_to_id?: string | null;
   created_at: string;
 }
 
 export function useChatSessions() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch all sessions for the user
   const fetchSessions = useCallback(async () => {
-    if (!user) {
+    if (!user || !isAuthenticated) {
       setSessions([]);
       setIsLoading(false);
       return;
@@ -49,11 +50,34 @@ export function useChatSessions() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, isAuthenticated]);
 
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+
+    // Subscribe to real-time updates for sessions
+    if (user?.id) {
+      const channel = supabase
+        .channel("chat-sessions-realtime")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "chat_sessions",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchSessions();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [fetchSessions, user?.id]);
 
   // Create a new session
   const createSession = useCallback(async (mode: AIMode, subject?: string): Promise<string | null> => {
@@ -142,7 +166,8 @@ export function useChatSessions() {
       if (error) throw error;
       return (data || []).map(msg => ({
         ...msg,
-        role: msg.role as "user" | "assistant"
+        role: msg.role as "user" | "assistant",
+        reply_to_id: msg.reply_to_id || null,
       }));
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -150,11 +175,12 @@ export function useChatSessions() {
     }
   }, []);
 
-  // Save a message to a session
+  // Save a message to a session with optional reply
   const saveMessage = useCallback(async (
     sessionId: string, 
     role: "user" | "assistant", 
-    content: string
+    content: string,
+    replyToId?: string
   ): Promise<string | null> => {
     if (!user) return null;
 
@@ -165,6 +191,7 @@ export function useChatSessions() {
           session_id: sessionId,
           role,
           content,
+          reply_to_id: replyToId || null,
         })
         .select()
         .single();
