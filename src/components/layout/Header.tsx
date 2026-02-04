@@ -59,9 +59,12 @@ export function Header() {
             <a href="/#subjects" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Subjects
             </a>
-            <a href="/#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Pricing
-            </a>
+            </Link>
+            <Link to="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Contact
+            </Link>
           </nav>
 
           {/* Auth Section */}
@@ -171,13 +174,20 @@ export function Header() {
               >
                 Subjects
               </a>
-              <a 
-                href="/#pricing" 
+              <Link 
+                to="/pricing" 
                 className="py-2 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Pricing
-              </a>
+              </Link>
+              <Link 
+                to="/contact" 
+                className="py-2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Contact
+              </Link>
               {!isAuthenticated && (
                 <Button className="mt-2" asChild onClick={() => setMobileMenuOpen(false)}>
                   <Link to="/auth">Get Started</Link>

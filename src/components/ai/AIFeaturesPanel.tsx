@@ -24,7 +24,15 @@ import {
   Copy,
   Download,
   Sparkles,
+  FileText,
+  FileType,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { SUBJECTS } from "@/lib/types";
 import ReactMarkdown from "react-markdown";
@@ -135,7 +143,49 @@ export function AIFeaturesPanel() {
     a.download = `mentorai-${activeTab}-${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Downloaded!");
+    toast.success("Downloaded as TXT!");
+  };
+
+  const downloadAsMarkdown = () => {
+    const blob = new Blob([result], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mentorai-${activeTab}-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Downloaded as Markdown!");
+  };
+
+  const downloadAsDoc = () => {
+    // Create HTML that Word can open
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>MentorAI - ${activeTab}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+          h1, h2, h3 { color: #333; }
+          pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+          code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        </style>
+      </head>
+      <body>
+        <h1>MentorAI - ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
+        <div>${result.replace(/\n/g, '<br>')}</div>
+      </body>
+      </html>
+    `;
+    const blob = new Blob([htmlContent], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mentorai-${activeTab}-${Date.now()}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Downloaded as DOC!");
   };
 
   return (
@@ -389,15 +439,33 @@ export function AIFeaturesPanel() {
           <div className="flex items-center justify-between">
             <CardTitle>Result</CardTitle>
             {result && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button variant="outline" size="sm" onClick={copyToClipboard}>
                   <Copy className="h-4 w-4 mr-1" />
                   Copy
                 </Button>
-                <Button variant="outline" size="sm" onClick={downloadAsText}>
-                  <Download className="h-4 w-4 mr-1" />
-                  Save
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={downloadAsText}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as .txt
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadAsMarkdown}>
+                      <FileType className="h-4 w-4 mr-2" />
+                      Download as .md
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadAsDoc}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as .doc
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             )}
           </div>

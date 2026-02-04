@@ -11,6 +11,8 @@ import { UserManagement } from "@/components/admin/UserManagement";
 import { PlatformSettings } from "@/components/admin/PlatformSettings";
 import { CustomPagesManager } from "@/components/admin/CustomPagesManager";
 import { AlertsManager } from "@/components/admin/AlertsManager";
+import { AIControlPanel } from "@/components/admin/AIControlPanel";
+import { ContactMessagesManager } from "@/components/admin/ContactMessagesManager";
 import { 
   Users, 
   Settings, 
@@ -19,7 +21,9 @@ import {
   FileText,
   Bell,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Bot,
+  MessageSquare,
 } from "lucide-react";
 
 export default function AdminPanel() {
@@ -104,7 +108,7 @@ export default function AdminPanel() {
 
           {/* Admin Tabs */}
           <Tabs defaultValue="users" className="w-full">
-            <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 sm:mb-6 h-auto p-1">
+            <TabsList className="grid w-full max-w-3xl grid-cols-7 mb-4 sm:mb-6 h-auto p-1">
               <TabsTrigger value="users" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
                 <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Users</span>
@@ -112,6 +116,10 @@ export default function AdminPanel() {
               <TabsTrigger value="settings" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
                 <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Settings</span>
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">AI</span>
               </TabsTrigger>
               <TabsTrigger value="pages" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
                 <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -121,9 +129,13 @@ export default function AdminPanel() {
                 <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Alerts</span>
               </TabsTrigger>
+              <TabsTrigger value="messages" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Messages</span>
+              </TabsTrigger>
               <TabsTrigger value="analytics" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
                 <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Analytics</span>
+                <span className="hidden sm:inline">Stats</span>
               </TabsTrigger>
             </TabsList>
 
@@ -133,6 +145,10 @@ export default function AdminPanel() {
 
             <TabsContent value="settings">
               <PlatformSettings settings={settings} onUpdateSetting={updateSetting} />
+            </TabsContent>
+
+            <TabsContent value="ai">
+              <AIControlPanel />
             </TabsContent>
 
             <TabsContent value="pages">
@@ -146,6 +162,10 @@ export default function AdminPanel() {
                 onUpdateAlert={updateAlert}
                 onDeleteAlert={deleteAlert}
               />
+            </TabsContent>
+
+            <TabsContent value="messages">
+              <ContactMessagesManager />
             </TabsContent>
 
             <TabsContent value="analytics">

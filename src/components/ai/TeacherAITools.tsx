@@ -21,6 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   BookOpen,
   Loader2,
   Copy,
@@ -30,6 +36,7 @@ import {
   Sparkles,
   Edit,
   Share2,
+  FileType,
 } from "lucide-react";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useGroupChats, useGroupMessages } from "@/hooks/useGroupChats";
@@ -37,9 +44,13 @@ import { SUBJECTS } from "@/lib/types";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
 export function TeacherAITools() {
   const { isLoading, generateNotes } = useAIFeatures();
   const { groups } = useGroupChats();
+  const { user, profile } = useAuth();
 
   const [notesTopic, setNotesTopic] = useState("");
   const [notesSubject, setNotesSubject] = useState("");
@@ -79,7 +90,7 @@ export function TeacherAITools() {
     a.download = `notes-${notesTopic.replace(/\s+/g, "-")}-${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Notes downloaded!");
+    toast.success("Notes downloaded as TXT!");
   };
 
   const downloadAsMarkdown = () => {
@@ -94,15 +105,66 @@ export function TeacherAITools() {
     toast.success("Notes downloaded as Markdown!");
   };
 
+  const downloadAsDoc = () => {
+    const content = editedNotes || generatedNotes;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Notes - ${notesTopic}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+          h1, h2, h3 { color: #333; }
+          pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <h1>${notesTopic}</h1>
+        <div>${content.replace(/\n/g, '<br>')}</div>
+      </body>
+      </html>
+    `;
+    const blob = new Blob([htmlContent], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `notes-${notesTopic.replace(/\s+/g, "-")}-${Date.now()}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Notes downloaded as DOC!");
+  };
+
   const handleShareToGroup = async () => {
     if (!selectedGroupId) {
       toast.error("Please select a group");
       return;
     }
 
-    // This would need the group messages hook
-    toast.success("Notes shared to group!");
-    setIsShareOpen(false);
+    // Send notes as a message to the group
+    const notesContent = editedNotes || generatedNotes;
+    const formattedMessage = `📚 **Shared Notes: ${notesTopic}**\n\n${notesContent}`;
+    
+    try {
+      const { error } = await supabase
+        .from("group_chat_messages")
+        .insert({
+          group_id: selectedGroupId,
+          user_id: user?.id,
+          sender_name: profile?.full_name || user?.email?.split("@")[0] || "Teacher",
+          sender_type: "user",
+          content: formattedMessage,
+          message_type: "text",
+        });
+
+      if (error) throw error;
+      toast.success("Notes shared to group!");
+      setIsShareOpen(false);
+      setSelectedGroupId("");
+    } catch (error) {
+      console.error("Error sharing notes:", error);
+      toast.error("Failed to share notes");
+    }
   };
 
   const notesContent = editedNotes || generatedNotes;
@@ -191,14 +253,28 @@ export function TeacherAITools() {
                   <Copy className="h-4 w-4 mr-1" />
                   Copy
                 </Button>
-                <Button variant="outline" size="sm" onClick={downloadAsText}>
-                  <Download className="h-4 w-4 mr-1" />
-                  .txt
-                </Button>
-                <Button variant="outline" size="sm" onClick={downloadAsMarkdown}>
-                  <Download className="h-4 w-4 mr-1" />
-                  .md
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={downloadAsText}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as .txt
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadAsMarkdown}>
+                      <FileType className="h-4 w-4 mr-2" />
+                      Download as .md
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadAsDoc}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as .doc
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {groups.length > 0 && (
                   <Button variant="outline" size="sm" onClick={() => setIsShareOpen(true)}>
                     <Share2 className="h-4 w-4 mr-1" />
