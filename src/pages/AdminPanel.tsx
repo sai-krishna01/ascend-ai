@@ -84,12 +84,12 @@ export default function AdminPanel() {
       
       <main className="pt-20 pb-8">
         <div className="container px-4">
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <Shield className="w-8 h-8 text-primary" />
-              <h1 className="text-2xl sm:text-3xl font-bold">Admin Panel</h1>
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+              <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Admin Panel</h1>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-sm sm:text-base">
               Manage content, users, and platform settings
             </p>
           </div>
@@ -104,25 +104,25 @@ export default function AdminPanel() {
 
           {/* Admin Tabs */}
           <Tabs defaultValue="users" className="w-full">
-            <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-6">
-              <TabsTrigger value="users" className="text-xs sm:text-sm">
-                <Users className="w-4 h-4 sm:mr-2" />
+            <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 sm:mb-6 h-auto p-1">
+              <TabsTrigger value="users" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Users</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="text-xs sm:text-sm">
-                <Settings className="w-4 h-4 sm:mr-2" />
+              <TabsTrigger value="settings" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Settings</span>
               </TabsTrigger>
-              <TabsTrigger value="pages" className="text-xs sm:text-sm">
-                <FileText className="w-4 h-4 sm:mr-2" />
+              <TabsTrigger value="pages" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Pages</span>
               </TabsTrigger>
-              <TabsTrigger value="alerts" className="text-xs sm:text-sm">
-                <Bell className="w-4 h-4 sm:mr-2" />
+              <TabsTrigger value="alerts" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Alerts</span>
               </TabsTrigger>
-              <TabsTrigger value="analytics" className="text-xs sm:text-sm">
-                <BarChart3 className="w-4 h-4 sm:mr-2" />
+              <TabsTrigger value="analytics" className="text-xs sm:text-sm py-2 px-1 sm:px-3 gap-1 sm:gap-2">
+                <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Analytics</span>
               </TabsTrigger>
             </TabsList>
@@ -150,12 +150,12 @@ export default function AdminPanel() {
 
             <TabsContent value="analytics">
               <Card className="glass border-white/10">
-                <CardContent className="py-12 text-center">
-                  <BarChart3 className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground mb-4">
+                <CardContent className="py-8 sm:py-12 text-center">
+                  <BarChart3 className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-3 sm:mb-4 text-sm sm:text-base">
                     Detailed analytics dashboard coming soon
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     Current Stats: {stats.totalUsers} users, {stats.totalSessions} total sessions
                   </p>
                 </CardContent>
