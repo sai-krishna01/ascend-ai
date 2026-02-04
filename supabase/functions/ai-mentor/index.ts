@@ -40,7 +40,7 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     console.log(`Fetching content from: ${url}`);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
     const response = await fetch(url, {
       headers: {
@@ -63,7 +63,7 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     // Handle PDF files
     if (contentType.includes("application/pdf") || url.toLowerCase().endsWith(".pdf")) {
       return { 
-        content: `[PDF Document: ${url}]\nThis is a PDF file. I can help you understand the topics mentioned. Please describe what you need help with or paste any specific text from the document.`, 
+        content: `[PDF Document: ${url}]\nThis PDF file has been uploaded. Please analyze its content based on the context of the conversation.`,
         type: "pdf",
         success: true 
       };
@@ -72,7 +72,7 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     // Handle images
     if (contentType.startsWith("image/")) {
       return { 
-        content: `[Image File: ${url}]\nThis is an image. Please describe what you see or what you'd like me to help explain about this image.`, 
+        content: `[Image File: ${url}]\nThis is an image file. I'll describe and analyze what I can understand from the context.`, 
         type: "image",
         success: true 
       };
@@ -94,15 +94,12 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     if (contentType.includes("text/html")) {
       const html = await response.text();
       
-      // Extract title
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       const title = titleMatch ? titleMatch[1].trim() : "";
       
-      // Extract meta description
       const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
       const description = descMatch ? descMatch[1].trim() : "";
       
-      // Extract main content (remove scripts, styles, nav, footer, etc.)
       let textContent = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -121,9 +118,8 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
         .replace(/\s+/g, " ")
         .trim();
       
-      // Limit content length
-      if (textContent.length > 12000) {
-        textContent = textContent.slice(0, 12000) + "... [content truncated]";
+      if (textContent.length > 15000) {
+        textContent = textContent.slice(0, 15000) + "... [content truncated]";
       }
       
       const result = [
@@ -138,18 +134,17 @@ async function fetchUrlContent(url: string): Promise<{ content: string; type: st
     // Handle plain text
     if (contentType.includes("text/")) {
       const text = await response.text();
-      const limitedText = text.length > 12000 ? text.slice(0, 12000) + "... [content truncated]" : text;
+      const limitedText = text.length > 15000 ? text.slice(0, 15000) + "... [content truncated]" : text;
       return { content: limitedText, type: "text", success: true };
     }
     
     // Handle JSON
     if (contentType.includes("application/json")) {
       const text = await response.text();
-      const limitedText = text.length > 8000 ? text.slice(0, 8000) + "... [content truncated]" : text;
+      const limitedText = text.length > 10000 ? text.slice(0, 10000) + "... [content truncated]" : text;
       return { content: `\`\`\`json\n${limitedText}\n\`\`\``, type: "json", success: true };
     }
     
-    // Unknown type
     return { 
       content: `[Binary/Unknown content from ${url} - Type: ${contentType}]`, 
       type: "unknown",
@@ -263,11 +258,16 @@ AUTONOMOUS AI CAPABILITIES - You should proactively:
 9. **Check Understanding**: Periodically ask if the explanation was clear and offer alternatives
 10. **Be Encouraging**: Celebrate progress and motivate during difficult topics
 
+CRITICAL QUALITY GUIDELINES:
+- NEVER hallucinate or make up facts - if you're unsure, say so and ask for clarification
+- If information is missing or unclear, ASK for clarification instead of guessing
+- Validate all facts before presenting them
+- If asked about current events or real-time data, clarify your knowledge cutoff
+
 FORMAT YOUR RESPONSES WELL:
 - Use markdown formatting (headings, bold, lists, code blocks)
 - Keep paragraphs short and scannable
-- Use emojis sparingly but effectively to highlight key points
-- Include visual aids through ASCII art or descriptive language when helpful`;
+- Use emojis sparingly but effectively to highlight key points`;
 
   const modePrompts: Record<string, string> = {
     "teacher": `You are MentorAI, an expert teacher and educator with deep knowledge across subjects. Your role is to:
@@ -304,11 +304,6 @@ MENTORING APPROACH:
 - Help with goal setting and planning
 - Be encouraging but realistic
 
-CONTENT ANALYSIS:
-- When resumes or job descriptions are shared, provide specific feedback
-- Analyze career-related documents thoroughly
-- Give constructive, actionable suggestions
-
 ${levelContext[level] || ""}
 ${langInstruction}
 ${autonomousInstructions}
@@ -324,11 +319,6 @@ INTERVIEW APPROACH:
 - Share tips for handling interview pressure
 - Practice common and tricky questions
 - Adapt questions to the user's target role and level
-
-CONTENT ANALYSIS:
-- When resumes or job descriptions are shared, tailor questions accordingly
-- Reference specific experiences and skills mentioned
-- Ask follow-up questions based on provided information
 
 ${levelContext[level] || ""}
 ${subject ? `FOCUS AREA: ${subject} related interviews and questions.` : ""}
@@ -346,11 +336,6 @@ EXAMINATION APPROACH:
 - Provide detailed explanations after testing
 - Grade responses fairly with clear criteria
 - Suggest areas for revision
-
-CONTENT ANALYSIS:
-- When study materials are shared, create questions based on that content
-- Reference specific topics from shared materials
-- Test understanding of shared content specifically
 
 ${levelContext[level] || ""}
 ${subject ? `SUBJECT FOCUS: ${subject} examination questions.` : ""}
@@ -371,11 +356,13 @@ serve(async (req) => {
   try {
     const { messages, mode, level, subject, language, attachments, isGuest } = await req.json() as RequestBody;
     
+    // Use Lovable AI gateway (automatically has API key configured)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
     if (!LOVABLE_API_KEY) {
       console.error("LOVABLE_API_KEY is not configured");
       return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
+        JSON.stringify({ error: "AI service not configured. Please contact support." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -395,7 +382,6 @@ serve(async (req) => {
         attachmentContext += `- **Type:** ${file.type}\n`;
         attachmentContext += `- **URL:** ${file.url}\n\n`;
         
-        // Attempt to fetch and read file content
         if (file.url) {
           const { content, type, success } = await fetchUrlContent(file.url);
           if (success && content.length > 50) {
@@ -408,7 +394,7 @@ serve(async (req) => {
         }
       }
       
-      attachmentContext += "\n**INSTRUCTION:** Use the above file content to provide accurate, specific answers. Reference the actual content when explaining.\n";
+      attachmentContext += "\n**INSTRUCTION:** Use the above file content to provide accurate, specific answers.\n";
     }
     
     if (attachments?.links && attachments.links.length > 0) {
@@ -421,13 +407,11 @@ serve(async (req) => {
         attachmentContext += `\n### Link ${i + 1}: ${link.title || "Shared Link"}\n`;
         attachmentContext += `**URL:** ${link.url}\n\n`;
         
-        // Check for YouTube
         const ytId = extractYouTubeId(link.url);
         if (ytId) {
           attachmentContext += getYouTubeInfo(link.url, link.title) + "\n\n";
           processedAttachments.push(`✓ YouTube: ${link.title || ytId}`);
         } else {
-          // Fetch content from the link
           const { content, type, success } = await fetchUrlContent(link.url);
           if (success && content.length > 100) {
             attachmentContext += `**Page Content:**\n${content}\n\n`;
@@ -439,27 +423,37 @@ serve(async (req) => {
         }
       }
       
-      attachmentContext += "\n**INSTRUCTION:** Use the information from these links to provide accurate, specific answers. Reference the actual content when relevant.\n";
+      attachmentContext += "\n**INSTRUCTION:** Use the above link content to provide accurate, contextual answers.\n";
     }
 
-    const systemPrompt = getSystemPrompt(mode, level, subject, language) + attachmentContext;
+    // Build system prompt
+    const systemPrompt = getSystemPrompt(mode, level, subject, language);
     
-    const allMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages,
-    ];
+    // Prepare messages with attachment context
+    const enrichedMessages = [...messages];
+    if (attachmentContext && enrichedMessages.length > 0) {
+      const lastUserMsgIndex = enrichedMessages.findLastIndex(m => m.role === "user");
+      if (lastUserMsgIndex >= 0) {
+        enrichedMessages[lastUserMsgIndex] = {
+          ...enrichedMessages[lastUserMsgIndex],
+          content: enrichedMessages[lastUserMsgIndex].content + attachmentContext
+        };
+      }
+    }
 
-    const totalAttachments = (attachments?.files?.length || 0) + (attachments?.links?.length || 0);
+    // Log request details
     console.log(`AI Mentor Request:
 - Mode: ${mode}
-- Level: ${level}
-- Subject: ${subject || 'general'}
-- Language: ${language || 'english'}
-- Attachments: ${totalAttachments}
+- Level: ${level || "null"}
+- Subject: ${subject || "general"}
+- Language: ${language || "english"}
+- Attachments: ${processedAttachments.length}
 - Processed: ${processedAttachments.join(", ") || "none"}
-- Guest: ${isGuest || false}
-- Messages: ${messages.length}`);
+- Guest: ${isGuest}
+- Messages: ${messages.length}
+`);
 
+    // Call Lovable AI Gateway (uses google/gemini-3-flash-preview by default)
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -468,16 +462,17 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: allMessages,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...enrichedMessages.map(m => ({ role: m.role, content: m.content })),
+        ],
         stream: true,
-        max_tokens: 8192,
-        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`AI gateway error: ${response.status} - ${errorText}`);
+      console.error(`AI Gateway error: ${response.status}`, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -485,35 +480,39 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
+      
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please try again later." }),
+          JSON.stringify({ error: "AI credits exhausted. Please contact support." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
+      
       return new Response(
         JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Stream the response
+    // Stream the response directly
     return new Response(response.body, {
-      headers: { 
-        ...corsHeaders, 
+      headers: {
+        ...corsHeaders,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
       },
     });
+
   } catch (error) {
     console.error("AI Mentor error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: "Something went wrong. Please try again.",
+        details: errorMessage 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

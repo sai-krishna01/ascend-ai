@@ -174,18 +174,36 @@ export function useGroupChats() {
     }
 
     try {
-      // Optimistically remove from UI first
+      // Store the group in case we need to revert
+      const groupToDelete = groups.find(g => g.id === groupId);
+      
+      // Optimistically remove from UI immediately
       setGroups(prev => prev.filter(g => g.id !== groupId));
 
-      // Delete the group (cascade will handle members and messages via RLS)
+      // Delete messages first (to avoid FK constraint issues)
+      await supabase
+        .from("group_chat_messages")
+        .delete()
+        .eq("group_id", groupId);
+      
+      // Delete members
+      await supabase
+        .from("group_chat_members")
+        .delete()
+        .eq("group_id", groupId);
+
+      // Delete the group
       const { error } = await supabase
         .from("group_chats")
         .delete()
         .eq("id", groupId);
 
       if (error) {
-        // Revert on error - refetch groups
-        fetchGroups();
+        console.error("Delete error:", error);
+        // Revert on error - add the group back
+        if (groupToDelete) {
+          setGroups(prev => [groupToDelete, ...prev]);
+        }
         throw error;
       }
 
@@ -196,7 +214,7 @@ export function useGroupChats() {
       toast.error(error.message || "Failed to delete group");
       return false;
     }
-  }, [user?.id, fetchGroups]);
+  }, [user?.id, groups]);
 
   const joinGroup = useCallback(async (groupId: string): Promise<boolean> => {
     if (!user?.id) {
