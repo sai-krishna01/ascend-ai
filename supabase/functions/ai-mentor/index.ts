@@ -10,12 +10,27 @@ interface Message {
   content: string;
 }
 
+interface FileAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
+interface LinkAttachment {
+  title: string;
+  url: string;
+}
+
 interface RequestBody {
   messages: Message[];
   mode: "teacher" | "mentor" | "interviewer" | "examiner";
   level: string;
   subject?: string;
   language?: string;
+  attachments?: {
+    files?: FileAttachment[];
+    links?: LinkAttachment[];
+  };
 }
 
 const getSystemPrompt = (mode: string, level: string, subject?: string, language?: string) => {
@@ -116,21 +131,40 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, level, subject, language } = await req.json() as RequestBody;
+    const { messages, mode, level, subject, language, attachments } = await req.json() as RequestBody;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = getSystemPrompt(mode, level, subject, language);
+    // Build context from attachments
+    let attachmentContext = "";
+    if (attachments?.files && attachments.files.length > 0) {
+      attachmentContext += "\n\n## Attached Files (User has shared these for context):\n";
+      attachments.files.forEach((file, i) => {
+        attachmentContext += `${i + 1}. **${file.name}** (${file.type}) - URL: ${file.url}\n`;
+      });
+      attachmentContext += "\nPlease acknowledge these files and help the user with questions about them. If they are documents (PDF, DOC), summarize key points or answer questions about their content.";
+    }
+    
+    if (attachments?.links && attachments.links.length > 0) {
+      attachmentContext += "\n\n## Attached Links (User has shared these for context):\n";
+      attachments.links.forEach((link, i) => {
+        attachmentContext += `${i + 1}. [${link.title}](${link.url})\n`;
+      });
+      attachmentContext += "\nPlease acknowledge these links. If they are YouTube videos, help explain the topic. For other resources, help the user understand or learn from them.";
+    }
+
+    const systemPrompt = getSystemPrompt(mode, level, subject, language) + attachmentContext;
     
     const allMessages = [
       { role: "system", content: systemPrompt },
       ...messages,
     ];
 
-    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}, Language: ${language || 'english'}`);
+    const hasAttachments = (attachments?.files?.length || 0) + (attachments?.links?.length || 0);
+    console.log(`AI Mentor request - Mode: ${mode}, Level: ${level}, Subject: ${subject || 'general'}, Language: ${language || 'english'}, Attachments: ${hasAttachments}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
