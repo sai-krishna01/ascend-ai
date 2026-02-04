@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
@@ -62,6 +62,18 @@ export default function Dashboard() {
     if (value === "dashboard" || value === "learn") {
       setView(value as View);
     }
+  }, []);
+
+  // Listen for custom event to switch to learn tab
+  useEffect(() => {
+    const handleSwitchToLearnTab = () => {
+      setActiveTab("learn");
+      setView("learn");
+    };
+    window.addEventListener('switch-to-learn-tab', handleSwitchToLearnTab);
+    return () => {
+      window.removeEventListener('switch-to-learn-tab', handleSwitchToLearnTab);
+    };
   }, []);
 
   const getSubjectName = (id: string) => {
