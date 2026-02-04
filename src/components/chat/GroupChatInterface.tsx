@@ -16,10 +16,9 @@ import {
   Link as LinkIcon,
   FileText,
   Image as ImageIcon,
-  Upload,
   X,
 } from "lucide-react";
-import { GroupChat, GroupMessage, useGroupMessages } from "@/hooks/useGroupChats";
+import { GroupMessage, useGroupMessages, useGroupChats } from "@/hooks/useGroupChats";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useAuth } from "@/hooks/useAuth";
 import { useFileUpload, UploadedFile } from "@/hooks/useFileUpload";
@@ -27,13 +26,16 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
 interface GroupChatInterfaceProps {
-  group: GroupChat;
+  groupId: string;
   onBack: () => void;
+  aiEnabled?: boolean;
 }
 
-export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
+export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupChatInterfaceProps) {
   const { user } = useAuth();
-  const { messages, isLoading, sendMessage, sendAIMessage } = useGroupMessages(group.id);
+  const { groups } = useGroupChats();
+  const group = groups.find(g => g.id === groupId);
+  const { messages, isLoading, sendMessage, sendAIMessage } = useGroupMessages(groupId);
   const { answerInGroupChat, isLoading: aiLoading } = useAIFeatures();
   const { uploadFile, isUploading, getFileIcon, formatFileSize } = useFileUpload();
   
@@ -78,10 +80,11 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
 
         const sent = await sendMessage(messageContent);
         
-        if (sent && aiMentioned && group.ai_enabled) {
+        // Only trigger AI if globally enabled and group has AI enabled
+        if (sent && aiMentioned && aiEnabled && group?.ai_enabled) {
           // AI responds to mention
           const cleanQuestion = messageContent.replace(/@ai|@mentor/gi, "").trim();
-          const aiResponse = await answerInGroupChat(cleanQuestion, group.subject || group.name);
+          const aiResponse = await answerInGroupChat(cleanQuestion, group?.subject || group?.name || "general");
           await sendAIMessage(aiResponse);
         }
       }
@@ -225,6 +228,17 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
     );
   };
 
+  if (!group) {
+    return (
+      <Card className="flex flex-col h-full items-center justify-center">
+        <CardContent className="text-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading group...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="flex flex-col h-full glass border-white/10">
       <CardHeader className="pb-2 border-b">
@@ -236,7 +250,7 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 {group.name}
-                {group.ai_enabled && (
+                {aiEnabled && group.ai_enabled && (
                   <Badge variant="outline" className="text-xs">
                     <Bot className="h-3 w-3 mr-1" />
                     AI Enabled
@@ -245,7 +259,7 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
               </CardTitle>
               <p className="text-xs text-muted-foreground">
                 {group.subject && `${group.subject} • `}
-                Type @AI or @Mentor to ask questions
+                {aiEnabled && group.ai_enabled ? "Type @AI or @Mentor to ask questions" : "Chat with your group"}
               </p>
             </div>
           </div>
@@ -266,7 +280,9 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
               <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No messages yet</p>
               <p className="text-sm text-muted-foreground/70">
-                Start the conversation or ask AI for help!
+                {aiEnabled && group.ai_enabled 
+                  ? "Start the conversation or ask AI for help!" 
+                  : "Start the conversation!"}
               </p>
             </div>
           ) : (
@@ -335,7 +351,7 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
             </Button>
             <Input
               ref={inputRef}
-              placeholder="Type a message... (@AI for help)"
+              placeholder={aiEnabled && group.ai_enabled ? "Type a message... (@AI for help)" : "Type a message..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}

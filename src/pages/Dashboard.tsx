@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
+import { useAISettings } from "@/hooks/useAISettings";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { LevelSelector } from "@/components/landing/LevelSelector";
@@ -11,14 +12,16 @@ import { ChatInterface } from "@/components/chat/ChatInterface";
 import { UserDashboard } from "@/components/dashboard/UserDashboard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { UserLevel, AIMode, SUBJECTS } from "@/lib/types";
 import { ChatSession } from "@/hooks/useChatSessions";
-import { ArrowRight, MessageCircle, LayoutDashboard, BookOpen, Loader2 } from "lucide-react";
+import { ArrowRight, MessageCircle, LayoutDashboard, BookOpen, Loader2, Ban } from "lucide-react";
 
 type View = "dashboard" | "learn" | "chat";
 
 export default function Dashboard() {
-  const { user, profile, isLoading, isAuthenticated } = useAuth();
+  const { user, profile, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: settingsLoading, canAccessAIMentor } = useAISettings();
   const [view, setView] = useState<View>("dashboard");
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [selectedLevel, setSelectedLevel] = useState<UserLevel | null>(
@@ -39,10 +42,13 @@ export default function Dashboard() {
 
   const handleStartChat = useCallback((subject?: string) => {
     if (!selectedLevel) return;
+    if (!canAccessAIMentor()) {
+      return; // AI is disabled, don't start chat
+    }
     setChatSubject(subject);
     setResumeSessionId(undefined);
     setView("chat");
-  }, [selectedLevel]);
+  }, [selectedLevel, canAccessAIMentor]);
 
   const handleResumeSession = useCallback((session: ChatSession) => {
     setSelectedMode(session.mode as AIMode);
@@ -79,6 +85,8 @@ export default function Dashboard() {
   const getSubjectName = (id: string) => {
     return SUBJECTS.find(s => s.id === id)?.name;
   };
+
+  const isLoading = authLoading || settingsLoading;
 
   if (isLoading) {
     return (
@@ -190,35 +198,49 @@ export default function Dashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="py-6 sm:py-8 text-center"
                       >
-                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
-                          Ready to Start Learning?
-                        </h2>
-                        
-                        <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mb-4 sm:mb-6">
-                          {selectedSubjects.length > 0 ? (
-                            selectedSubjects.map(subjectId => (
-                              <Button
-                                key={subjectId}
-                                variant="secondary"
-                                onClick={() => handleStartChat(subjectId)}
-                                className="gap-1.5 sm:gap-2 text-sm"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                Start with {getSubjectName(subjectId)}
-                              </Button>
-                            ))
-                          ) : null}
-                        </div>
+                        {canAccessAIMentor() ? (
+                          <>
+                            <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
+                              Ready to Start Learning?
+                            </h2>
+                            
+                            <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mb-4 sm:mb-6">
+                              {selectedSubjects.length > 0 ? (
+                                selectedSubjects.map(subjectId => (
+                                  <Button
+                                    key={subjectId}
+                                    variant="secondary"
+                                    onClick={() => handleStartChat(subjectId)}
+                                    className="gap-1.5 sm:gap-2 text-sm"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                    Start with {getSubjectName(subjectId)}
+                                  </Button>
+                                ))
+                              ) : null}
+                            </div>
 
-                        <Button
-                          variant="hero"
-                          size="xl"
-                          onClick={() => handleStartChat()}
-                          className="gap-2"
-                        >
-                          Start General Chat
-                          <ArrowRight className="w-5 h-5" />
-                        </Button>
+                            <Button
+                              variant="hero"
+                              size="xl"
+                              onClick={() => handleStartChat()}
+                              className="gap-2"
+                            >
+                              Start General Chat
+                              <ArrowRight className="w-5 h-5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Card className="max-w-md mx-auto">
+                            <CardContent className="py-8 text-center">
+                              <Ban className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                              <h2 className="text-lg font-bold mb-2">AI Mentor Unavailable</h2>
+                              <p className="text-muted-foreground text-sm">
+                                AI Mentor is currently disabled by the administrator. Please check back later or contact support.
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )}
                       </motion.div>
                     )}
                   </TabsContent>
