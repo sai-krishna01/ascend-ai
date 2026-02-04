@@ -23,23 +23,54 @@ export function useAuth() {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
+      // Use maybeSingle() to handle 0 rows gracefully
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
-      if (profileError && profileError.code !== "PGRST116") {
+      if (profileError) {
         console.error("Error fetching profile:", profileError);
+      }
+
+      // If no profile exists, create one
+      if (!profile && !profileError) {
+        const { data: session } = await supabase.auth.getSession();
+        const userMeta = session?.session?.user?.user_metadata;
+        
+        const { data: newProfile, error: createError } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: userId,
+            full_name: userMeta?.full_name || null,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating profile:", createError);
+        }
+
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        return {
+          profile: newProfile as UserProfile | null,
+          role: (roleData?.role as AppRole) || "student",
+        };
       }
 
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
-      if (roleError && roleError.code !== "PGRST116") {
+      if (roleError) {
         console.error("Error fetching role:", roleError);
       }
 
