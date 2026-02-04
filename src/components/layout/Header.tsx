@@ -18,7 +18,9 @@ import {
   LogOut, 
   LayoutDashboard,
   Settings,
-  Shield
+  Shield,
+  Users,
+  Sparkles,
 } from "lucide-react";
 
 export function Header() {
@@ -86,6 +88,18 @@ export function Header() {
                     <Link to="/dashboard" className="cursor-pointer">
                       <LayoutDashboard className="w-4 h-4 mr-2" />
                       Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/groups" className="cursor-pointer">
+                      <Users className="w-4 h-4 mr-2" />
+                      Group Chats
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/ai-tools" className="cursor-pointer">
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      AI Tools
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin && (

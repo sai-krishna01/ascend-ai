@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSessions, ChatSession } from "@/hooks/useChatSessions";
@@ -9,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   BookOpen, 
-  Target, 
   Clock, 
   Trophy,
   TrendingUp,
@@ -17,7 +17,8 @@ import {
   ArrowRight,
   Sparkles,
   Trash2,
-  Play
+  Play,
+  Users,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -266,16 +267,54 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
       </div>
 
       {/* Quick Actions */}
-      <Card className="glass border-white/10 overflow-hidden">
-        <div className="p-4 sm:p-6 md:p-8 bg-gradient-to-r from-primary/20 to-accent/20">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-            <div>
-              <h3 className="text-lg sm:text-xl font-bold mb-1">Ready to continue learning?</h3>
-              <p className="text-muted-foreground text-sm sm:text-base">Pick up where you left off or start something new</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card className="glass border-white/10 overflow-hidden group hover:border-primary/30 transition-colors">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-primary/20 text-primary">
+                <Users className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold">Group Chats</h3>
             </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Join study groups and collaborate with peers
+            </p>
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link to="/groups">
+                Open Groups
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="glass border-white/10 overflow-hidden group hover:border-accent/30 transition-colors">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-accent/20 text-accent">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold">AI Tools</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Generate quizzes, notes, and get AI help
+            </p>
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link to="/ai-tools">
+                Open AI Tools
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="glass border-white/10 overflow-hidden sm:col-span-2 lg:col-span-1">
+          <div className="p-4 sm:p-6 bg-gradient-to-r from-primary/20 to-accent/20 h-full flex flex-col justify-center">
+            <h3 className="text-lg font-bold mb-1">Ready to continue?</h3>
+            <p className="text-muted-foreground text-sm mb-4">Pick up where you left off</p>
             <Button 
               variant="hero" 
-              className="gap-2 shrink-0 w-full sm:w-auto"
+              className="gap-2 w-full"
               onClick={() => {
                 const event = new CustomEvent('switch-to-learn-tab');
                 window.dispatchEvent(event);
@@ -285,8 +324,8 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
