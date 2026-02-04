@@ -11,6 +11,8 @@ import Settings from "./pages/Settings";
 import AdminPanel from "./pages/AdminPanel";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import GroupChats from "./pages/GroupChats";
+import AITools from "./pages/AITools";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,8 @@ const App = () => (
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/groups" element={<GroupChats />} />
+          <Route path="/ai-tools" element={<AITools />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

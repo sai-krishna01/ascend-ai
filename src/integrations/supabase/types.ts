@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_interactions: {
+        Row: {
+          created_at: string
+          id: string
+          interaction_type: string
+          metadata: Json | null
+          prompt: string
+          response: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interaction_type: string
+          metadata?: Json | null
+          prompt: string
+          response?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interaction_type?: string
+          metadata?: Json | null
+          prompt?: string
+          response?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string
@@ -106,6 +139,133 @@ export type Database = {
           title?: string
           updated_at?: string | null
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      group_chat_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string
+          last_read_at: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          role?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_chat_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "group_chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          file_name: string | null
+          file_type: string | null
+          file_url: string | null
+          group_id: string
+          id: string
+          message_type: string
+          sender_name: string | null
+          sender_type: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          group_id: string
+          id?: string
+          message_type?: string
+          sender_name?: string | null
+          sender_type?: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          group_id?: string
+          id?: string
+          message_type?: string
+          sender_name?: string | null
+          sender_type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_chat_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "group_chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_chats: {
+        Row: {
+          ai_enabled: boolean | null
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subject: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_enabled?: boolean | null
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subject?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_enabled?: boolean | null
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subject?: string | null
+          type?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -202,6 +362,51 @@ export type Database = {
           updated_at?: string
           user_id?: string
           user_level?: string
+        }
+        Relationships: []
+      }
+      study_resources: {
+        Row: {
+          created_at: string
+          description: string | null
+          downloads: number | null
+          file_path: string | null
+          id: string
+          is_public: boolean | null
+          resource_type: string
+          subject: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          downloads?: number | null
+          file_path?: string | null
+          id?: string
+          is_public?: boolean | null
+          resource_type: string
+          subject?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          downloads?: number | null
+          file_path?: string | null
+          id?: string
+          is_public?: boolean | null
+          resource_type?: string
+          subject?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+          url?: string | null
         }
         Relationships: []
       }
