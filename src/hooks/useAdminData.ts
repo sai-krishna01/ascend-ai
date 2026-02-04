@@ -82,13 +82,11 @@ export function useAdminData() {
       
       if (profilesData) {
         // Fetch roles for each user
-        const usersWithRoles = await Promise.all(
-          profilesData.map(async (profile) => {
-            const { data: roleData } = await supabase
+          const { data: roleData } = await supabase
               .from("user_roles")
               .select("role")
               .eq("user_id", profile.user_id)
-              .single();
+              .maybeSingle();
             
             return {
               ...profile,
