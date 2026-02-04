@@ -42,6 +42,7 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [pendingFile, setPendingFile] = useState<UploadedFile | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; content: string; senderName: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,8 +56,15 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
   const handleSend = async () => {
     if ((!input.trim() && !pendingFile) || isSending) return;
 
-    const messageContent = input.trim();
+    let messageContent = input.trim();
+    
+    // Add reply context
+    if (replyTo) {
+      messageContent = `> Replying to ${replyTo.senderName}: "${replyTo.content.slice(0, 50)}${replyTo.content.length > 50 ? '...' : ''}"\n\n${messageContent}`;
+    }
+    
     setInput("");
+    setReplyTo(null);
     setIsSending(true);
 
     try {
@@ -95,6 +103,15 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
       setIsSending(false);
       inputRef.current?.focus();
     }
+  };
+
+  const handleReply = (msg: GroupMessage) => {
+    setReplyTo({
+      id: msg.id,
+      content: msg.content,
+      senderName: msg.sender_name || (msg.sender_type === "ai" ? "MentorAI" : "User"),
+    });
+    inputRef.current?.focus();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,7 +200,7 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
           </div>
 
           <div
-            className={`rounded-2xl px-4 py-2 ${
+            className={`rounded-2xl px-4 py-2 group relative ${
               isOwnMessage
                 ? "bg-primary text-primary-foreground rounded-br-md"
                 : isAI
@@ -222,6 +239,13 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
             ) : (
               <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
             )}
+            {/* Reply button */}
+            <button
+              onClick={() => handleReply(msg)}
+              className="absolute -bottom-5 right-0 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+            >
+              ↩ Reply
+            </button>
           </div>
         </div>
       </div>
@@ -303,6 +327,23 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
         <Separator />
 
         <div className="p-4">
+          {/* Reply indicator */}
+          {replyTo && (
+            <div className="mb-2 flex items-center gap-2 p-2 bg-primary/10 rounded-lg border-l-2 border-primary">
+              <span className="text-primary text-sm">↩</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs text-muted-foreground">Replying to {replyTo.senderName}</span>
+                <p className="text-sm truncate">{replyTo.content}</p>
+              </div>
+              <button
+                onClick={() => setReplyTo(null)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {/* Pending file indicator */}
           {pendingFile && (
             <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg">

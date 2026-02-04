@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   Select, 
   SelectContent, 
@@ -17,7 +19,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Users, RefreshCw, Loader2, Edit2, Shield } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Users, RefreshCw, Loader2, Edit2, Shield, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { AppRole } from "@/lib/types";
@@ -41,6 +53,15 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newRole, setNewRole] = useState<AppRole>("student");
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Create user state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newUser, setNewUser] = useState({ email: "", password: "", fullName: "", role: "student" as AppRole });
+  
+  // Delete user state
+  const [deleteUser, setDeleteUser] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -81,6 +102,90 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
     }
   };
 
+  const handleCreateUser = async () => {
+    if (!newUser.email || !newUser.password) {
+      toast.error("Email and password are required");
+      return;
+    }
+
+    if (newUser.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Create user via Supabase Admin API (using edge function would be better for production)
+      // For now, we'll use the standard signup which will create the user
+      const { data, error } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: newUser.password,
+        options: {
+          data: { full_name: newUser.fullName },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Update role if not student (default)
+        if (newUser.role !== "student") {
+          // Wait a bit for the trigger to create default role
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          await supabase
+            .from("user_roles")
+            .delete()
+            .eq("user_id", data.user.id);
+          
+          await supabase
+            .from("user_roles")
+            .insert({ user_id: data.user.id, role: newUser.role });
+        }
+
+        toast.success(`User created: ${newUser.email}`);
+        setIsCreateOpen(false);
+        setNewUser({ email: "", password: "", fullName: "", role: "student" });
+        onRefresh();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create user");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUser) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete user role first
+      await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", deleteUser.user_id);
+
+      // Delete user profile
+      await supabase
+        .from("profiles")
+        .delete()
+        .eq("user_id", deleteUser.user_id);
+
+      // Note: We can't delete from auth.users directly from client
+      // The user will remain in auth but without profile/role
+      // For full deletion, you'd need an admin edge function
+      
+      toast.success("User removed from platform");
+      setDeleteUser(null);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete user");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case "founder":
@@ -117,14 +222,20 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
               Manage users, roles, and permissions ({users.length} total)
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
-            {isRefreshing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
-            )}
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add User
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              {isRefreshing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 sm:space-y-3 max-h-[400px] overflow-y-auto">
@@ -169,6 +280,15 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
                     >
                       <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 sm:h-8 sm:w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                      onClick={() => setDeleteUser(user)}
+                      title="Delete User"
+                    >
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </Button>
                   </div>
                 </div>
               ))
@@ -176,6 +296,86 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create User Dialog */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-primary" />
+              Create New User
+            </DialogTitle>
+            <DialogDescription>
+              Add a new user with a temporary password
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={newUser.email}
+                onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Temporary Password *</Label>
+              <Input
+                id="password"
+                type="text"
+                placeholder="Min 6 characters"
+                value={newUser.password}
+                onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">User can change this after logging in</p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <Input
+                id="fullName"
+                placeholder="John Doe"
+                value={newUser.fullName}
+                onChange={(e) => setNewUser(prev => ({ ...prev, fullName: e.target.value }))}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser(prev => ({ ...prev, role: v as AppRole }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">🎓 Student</SelectItem>
+                  <SelectItem value="teacher">👨‍🏫 Teacher</SelectItem>
+                  <SelectItem value="admin">🛡️ Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateUser} disabled={isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create User"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Role Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
@@ -247,6 +447,36 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation */}
+      <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{deleteUser?.full_name || "this user"}</strong> from the platform? 
+              This will delete their profile and role. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

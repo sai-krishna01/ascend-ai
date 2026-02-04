@@ -36,6 +36,12 @@ interface Attachment {
   fileType?: string;
 }
 
+interface ReplyTo {
+  id: string;
+  content: string;
+  role: string;
+}
+
 export function ChatInterface({ 
   mode, 
   level, 
@@ -50,6 +56,7 @@ export function ChatInterface({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +85,6 @@ export function ChatInterface({
     if (!files || files.length === 0) return;
 
     for (const file of Array.from(files)) {
-      // Upload file
       const uploaded = await uploadFile(file);
       if (uploaded) {
         setAttachments(prev => [...prev, {
@@ -90,7 +96,6 @@ export function ChatInterface({
       }
     }
 
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -102,7 +107,6 @@ export function ChatInterface({
       return;
     }
 
-    // Validate URL
     try {
       new URL(linkUrl);
     } catch {
@@ -125,28 +129,45 @@ export function ChatInterface({
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleReply = (message: { id: string; content: string; role: string }) => {
+    setReplyTo({ id: message.id, content: message.content, role: message.role });
+    inputRef.current?.focus();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if ((!input.trim() && attachments.length === 0) || isLoading) return;
 
-    // Build message with attachments context
+    // Build message with reply context
     let messageContent = input.trim();
     
-    if (attachments.length > 0) {
-      const attachmentInfo = attachments.map(att => {
-        if (att.type === "file") {
-          return `[Attached file: ${att.name}${att.url ? ` - ${att.url}` : ""}]`;
-        } else {
-          return `[Attached link: ${att.name} - ${att.url}]`;
-        }
-      }).join("\n");
-      
-      messageContent = attachmentInfo + (messageContent ? `\n\n${messageContent}` : "\n\nPlease analyze the attached content.");
+    if (replyTo) {
+      const replyPrefix = `> Replying to: "${replyTo.content.slice(0, 100)}${replyTo.content.length > 100 ? '...' : ''}"\n\n`;
+      messageContent = replyPrefix + messageContent;
     }
 
-    sendMessage(messageContent);
+    // Build files and links for API
+    const files = attachments
+      .filter(a => a.type === "file" && a.url)
+      .map(a => ({ name: a.name, url: a.url!, type: a.fileType || "unknown" }));
+    
+    const links = attachments
+      .filter(a => a.type === "link" && a.url)
+      .map(a => ({ title: a.name, url: a.url! }));
+
+    // If only attachments, ask AI to analyze
+    if (!input.trim() && attachments.length > 0) {
+      messageContent = "Please analyze the attached content and help me understand it.";
+    }
+
+    sendMessage(
+      messageContent,
+      files.length > 0 ? files : undefined,
+      links.length > 0 ? links : undefined
+    );
     setInput("");
     setAttachments([]);
+    setReplyTo(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -327,10 +348,10 @@ export function ChatInterface({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} group`}
                 >
                   <div
-                    className={`max-w-[90%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
+                    className={`max-w-[90%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 relative ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-secondary"
@@ -343,6 +364,13 @@ export function ChatInterface({
                     ) : (
                       <p className="text-xs sm:text-sm whitespace-pre-wrap">{message.content}</p>
                     )}
+                    {/* Reply button */}
+                    <button
+                      onClick={() => handleReply({ id: message.id, content: message.content, role: message.role })}
+                      className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+                    >
+                      ↩ Reply
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -362,6 +390,22 @@ export function ChatInterface({
           </>
         )}
       </div>
+
+      {/* Reply Preview */}
+      {replyTo && (
+        <div className="px-3 sm:px-4 py-2 border-t bg-primary/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-primary">↩</span>
+              <span className="text-muted-foreground">Replying to {replyTo.role === "user" ? "yourself" : "AI"}:</span>
+              <span className="truncate max-w-[200px]">{replyTo.content.slice(0, 50)}...</span>
+            </div>
+            <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-destructive">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Attachments Preview */}
       {attachments.length > 0 && (

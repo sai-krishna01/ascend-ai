@@ -3,6 +3,17 @@ import { useChatSessions, ChatMessage } from "./useChatSessions";
 import { toast } from "sonner";
 import type { AIMode, UserLevel, Message } from "@/lib/types";
 
+interface FileAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
+interface LinkAttachment {
+  title: string;
+  url: string;
+}
+
 interface UsePersistentChatOptions {
   mode: AIMode;
   level: UserLevel;
@@ -58,8 +69,12 @@ export function usePersistentChat({
     await updateSessionTitle(currentSessionId, title);
   }, [updateSessionTitle]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+  const sendMessage = useCallback(async (
+    content: string,
+    files?: FileAttachment[],
+    links?: LinkAttachment[]
+  ) => {
+    if (!content.trim() && (!files || files.length === 0) && (!links || links.length === 0)) return;
 
     let currentSessionId = sessionId;
 
@@ -102,6 +117,15 @@ export function usePersistentChat({
         content: m.content,
       }));
 
+      // Build attachments object for the API
+      const attachments: { files?: FileAttachment[]; links?: LinkAttachment[] } = {};
+      if (files && files.length > 0) {
+        attachments.files = files;
+      }
+      if (links && links.length > 0) {
+        attachments.links = links;
+      }
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -114,6 +138,7 @@ export function usePersistentChat({
           level,
           subject,
           language,
+          attachments: Object.keys(attachments).length > 0 ? attachments : undefined,
         }),
       });
 
