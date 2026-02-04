@@ -37,8 +37,8 @@ import { GroupChat, useGroupChats } from "@/hooks/useGroupChats";
 import { SUBJECTS } from "@/lib/types";
 
 interface GroupChatListProps {
-  onSelectGroup: (group: GroupChat) => void;
-  selectedGroupId?: string;
+  onSelectGroup: (groupId: string) => void;
+  selectedGroupId?: string | null;
 }
 
 export function GroupChatList({ onSelectGroup, selectedGroupId }: GroupChatListProps) {
@@ -248,7 +248,7 @@ export function GroupChatList({ onSelectGroup, selectedGroupId }: GroupChatListP
               {filteredGroups.map((group) => (
                 <button
                   key={group.id}
-                  onClick={() => onSelectGroup(group)}
+                  onClick={() => onSelectGroup(group.id)}
                   className={`w-full p-4 text-left hover:bg-accent/50 transition-colors ${
                     selectedGroupId === group.id ? "bg-accent" : ""
                   }`}
