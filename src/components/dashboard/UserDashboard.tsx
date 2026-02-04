@@ -166,7 +166,14 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
               <div className="text-center py-6 sm:py-8">
                 <Sparkles className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-muted-foreground/50 mb-3 sm:mb-4" />
                 <p className="text-muted-foreground mb-3 sm:mb-4 text-sm sm:text-base">No progress yet. Start learning!</p>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const event = new CustomEvent('switch-to-learn-tab');
+                    window.dispatchEvent(event);
+                  }}
+                >
                   Start Learning
                 </Button>
               </div>
@@ -242,7 +249,14 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
               <div className="text-center py-6 sm:py-8">
                 <MessageSquare className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-muted-foreground/50 mb-3 sm:mb-4" />
                 <p className="text-muted-foreground mb-3 sm:mb-4 text-sm sm:text-base">No sessions yet. Start chatting!</p>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const event = new CustomEvent('switch-to-learn-tab');
+                    window.dispatchEvent(event);
+                  }}
+                >
                   Start a Session
                 </Button>
               </div>
@@ -259,7 +273,14 @@ export function UserDashboard({ onResumeSession }: UserDashboardProps) {
               <h3 className="text-lg sm:text-xl font-bold mb-1">Ready to continue learning?</h3>
               <p className="text-muted-foreground text-sm sm:text-base">Pick up where you left off or start something new</p>
             </div>
-            <Button variant="hero" className="gap-2 shrink-0 w-full sm:w-auto">
+            <Button 
+              variant="hero" 
+              className="gap-2 shrink-0 w-full sm:w-auto"
+              onClick={() => {
+                const event = new CustomEvent('switch-to-learn-tab');
+                window.dispatchEvent(event);
+              }}
+            >
               Continue Learning
               <ArrowRight className="w-4 h-4" />
             </Button>
