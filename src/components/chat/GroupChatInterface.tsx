@@ -6,6 +6,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Send, 
   Paperclip, 
@@ -17,7 +28,15 @@ import {
   FileText,
   Image as ImageIcon,
   X,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { GroupMessage, useGroupMessages, useGroupChats } from "@/hooks/useGroupChats";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,8 +51,8 @@ interface GroupChatInterfaceProps {
 }
 
 export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupChatInterfaceProps) {
-  const { user } = useAuth();
-  const { groups } = useGroupChats();
+  const { user, role } = useAuth();
+  const { groups, deleteGroup } = useGroupChats();
   const group = groups.find(g => g.id === groupId);
   const { messages, isLoading, sendMessage, sendAIMessage } = useGroupMessages(groupId);
   const { answerInGroupChat, isLoading: aiLoading } = useAIFeatures();
@@ -43,9 +62,25 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
   const [isSending, setIsSending] = useState(false);
   const [pendingFile, setPendingFile] = useState<UploadedFile | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; content: string; senderName: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if user can delete this group
+  const isAdmin = role === "admin" || role === "founder";
+  const isCreator = group?.created_by === user?.id;
+  const canDelete = isAdmin || isCreator;
+
+  const handleDeleteGroup = async () => {
+    if (!canDelete) return;
+    setIsDeleting(true);
+    const success = await deleteGroup(groupId);
+    setIsDeleting(false);
+    if (success) {
+      onBack();
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -287,9 +322,58 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
               </p>
             </div>
           </div>
-          <Button variant="outline" size="icon">
-            <Users className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon">
+              <Users className="h-4 w-4" />
+            </Button>
+            {canDelete && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Group
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Group</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete "{group.name}"? This action cannot be undone and all messages will be lost.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteGroup}
+                          disabled={isDeleting}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {isDeleting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            "Delete"
+                          )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </CardHeader>
 

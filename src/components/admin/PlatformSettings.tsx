@@ -9,7 +9,7 @@ import { Power, UserPlus, Sparkles } from "lucide-react";
 interface Setting {
   id: string;
   key: string;
-  value: { enabled?: boolean; message?: string };
+  value: { enabled?: boolean; message?: string } | null;
   description: string | null;
 }
 
@@ -26,16 +26,29 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
     return settings.find(s => s.key === key);
   };
 
+  // Safely get value with defaults
+  const getSettingValue = (key: string, defaultValue: { enabled: boolean; message?: string }) => {
+    const setting = getSetting(key);
+    if (!setting?.value) return defaultValue;
+    return { ...defaultValue, ...setting.value };
+  };
+
   const maintenanceMode = getSetting("maintenance_mode");
   const registrationEnabled = getSetting("registration_enabled");
   const aiFeatures = getSetting("ai_features_enabled");
 
-  const handleToggle = (key: string, currentValue: any) => {
-    onUpdateSetting(key, { ...currentValue, enabled: !currentValue.enabled });
+  const maintenanceValue = getSettingValue("maintenance_mode", { enabled: false, message: "We are currently performing maintenance. Please check back later." });
+  const registrationValue = getSettingValue("registration_enabled", { enabled: true });
+  const aiValue = getSettingValue("ai_features_enabled", { enabled: true });
+
+  const handleToggle = (key: string, currentValue: { enabled?: boolean; message?: string }) => {
+    const safeValue = currentValue || { enabled: false };
+    onUpdateSetting(key, { ...safeValue, enabled: !safeValue.enabled });
   };
 
-  const handleMessageSave = (key: string, currentValue: any) => {
-    onUpdateSetting(key, { ...currentValue, message: messageValue });
+  const handleMessageSave = (key: string, currentValue: { enabled?: boolean; message?: string }) => {
+    const safeValue = currentValue || { enabled: false };
+    onUpdateSetting(key, { ...safeValue, message: messageValue });
     setEditingMessage(null);
   };
 
@@ -60,8 +73,8 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
             </div>
             <Switch
               id="maintenance"
-              checked={maintenanceMode?.value?.enabled || false}
-              onCheckedChange={() => handleToggle("maintenance_mode", maintenanceMode?.value)}
+              checked={maintenanceValue.enabled}
+              onCheckedChange={() => handleToggle("maintenance_mode", maintenanceValue)}
             />
           </div>
           {editingMessage === "maintenance_mode" ? (
@@ -73,7 +86,7 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
                 className="flex-1 text-sm"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => handleMessageSave("maintenance_mode", maintenanceMode?.value)}>
+                <Button size="sm" onClick={() => handleMessageSave("maintenance_mode", maintenanceValue)}>
                   Save
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setEditingMessage(null)}>
@@ -88,7 +101,7 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
               className="p-0 h-auto mt-2 ml-0 sm:ml-10 text-xs sm:text-sm"
               onClick={() => {
                 setEditingMessage("maintenance_mode");
-                setMessageValue(maintenanceMode?.value?.message || "");
+                setMessageValue(maintenanceValue.message || "");
               }}
             >
               Edit message
@@ -110,8 +123,8 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
             </div>
             <Switch
               id="registration"
-              checked={registrationEnabled?.value?.enabled !== false}
-              onCheckedChange={() => handleToggle("registration_enabled", registrationEnabled?.value || { enabled: true })}
+              checked={registrationValue.enabled}
+              onCheckedChange={() => handleToggle("registration_enabled", registrationValue)}
             />
           </div>
         </div>
@@ -130,8 +143,8 @@ export function PlatformSettings({ settings, onUpdateSetting }: PlatformSettings
             </div>
             <Switch
               id="ai"
-              checked={aiFeatures?.value?.enabled !== false}
-              onCheckedChange={() => handleToggle("ai_features_enabled", aiFeatures?.value || { enabled: true })}
+              checked={aiValue.enabled}
+              onCheckedChange={() => handleToggle("ai_features_enabled", aiValue)}
             />
           </div>
         </div>
