@@ -9,7 +9,6 @@ import { Separator } from "@/components/ui/separator";
 import { 
   Send, 
   Paperclip, 
-  Smile, 
   Bot, 
   Users, 
   ArrowLeft,
@@ -17,10 +16,13 @@ import {
   Link as LinkIcon,
   FileText,
   Image as ImageIcon,
+  Upload,
+  X,
 } from "lucide-react";
 import { GroupChat, GroupMessage, useGroupMessages } from "@/hooks/useGroupChats";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useAuth } from "@/hooks/useAuth";
+import { useFileUpload, UploadedFile } from "@/hooks/useFileUpload";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -33,11 +35,14 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
   const { user } = useAuth();
   const { messages, isLoading, sendMessage, sendAIMessage } = useGroupMessages(group.id);
   const { answerInGroupChat, isLoading: aiLoading } = useAIFeatures();
+  const { uploadFile, isUploading, getFileIcon, formatFileSize } = useFileUpload();
   
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [pendingFile, setPendingFile] = useState<UploadedFile | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -46,24 +51,39 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isSending) return;
+    if ((!input.trim() && !pendingFile) || isSending) return;
 
     const messageContent = input.trim();
     setInput("");
     setIsSending(true);
 
     try {
-      // Check if AI is mentioned
-      const aiMentioned = messageContent.toLowerCase().includes("@ai") || 
-                          messageContent.toLowerCase().includes("@mentor");
+      // If there's a pending file, send it first
+      if (pendingFile) {
+        await sendMessage(
+          pendingFile.name,
+          "file",
+          pendingFile.url,
+          pendingFile.name,
+          pendingFile.type
+        );
+        setPendingFile(null);
+      }
 
-      const sent = await sendMessage(messageContent);
-      
-      if (sent && aiMentioned && group.ai_enabled) {
-        // AI responds to mention
-        const cleanQuestion = messageContent.replace(/@ai|@mentor/gi, "").trim();
-        const aiResponse = await answerInGroupChat(cleanQuestion, group.subject || group.name);
-        await sendAIMessage(aiResponse);
+      // Send text message if any
+      if (messageContent) {
+        // Check if AI is mentioned
+        const aiMentioned = messageContent.toLowerCase().includes("@ai") || 
+                            messageContent.toLowerCase().includes("@mentor");
+
+        const sent = await sendMessage(messageContent);
+        
+        if (sent && aiMentioned && group.ai_enabled) {
+          // AI responds to mention
+          const cleanQuestion = messageContent.replace(/@ai|@mentor/gi, "").trim();
+          const aiResponse = await answerInGroupChat(cleanQuestion, group.subject || group.name);
+          await sendAIMessage(aiResponse);
+        }
       }
     } catch (error) {
       console.error("Send error:", error);
@@ -71,6 +91,22 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const uploaded = await uploadFile(file);
+    if (uploaded) {
+      setPendingFile(uploaded);
+      toast.success(`${file.name} ready to send`);
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -251,6 +287,23 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
         <Separator />
 
         <div className="p-4">
+          {/* Pending file indicator */}
+          {pendingFile && (
+            <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg">
+              <span>{getFileIcon(pendingFile.type)}</span>
+              <span className="text-sm flex-1 truncate">{pendingFile.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatFileSize(pendingFile.size)}
+              </span>
+              <button
+                onClick={() => setPendingFile(null)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -260,14 +313,25 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
             >
               <LinkIcon className="h-5 w-5" />
             </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.doc,.docx,.txt,image/*"
+              className="hidden"
+            />
             <Button
               variant="ghost"
               size="icon"
               className="shrink-0"
-              disabled
-              title="File upload coming soon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
             >
-              <Paperclip className="h-5 w-5" />
+              {isUploading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Paperclip className="h-5 w-5" />
+              )}
             </Button>
             <Input
               ref={inputRef}
@@ -280,7 +344,7 @@ export function GroupChatInterface({ group, onBack }: GroupChatInterfaceProps) {
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || isSending}
+              disabled={(!input.trim() && !pendingFile) || isSending}
               size="icon"
               className="shrink-0"
             >
