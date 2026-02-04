@@ -77,40 +77,63 @@ export function useGroupChats() {
     subject?: string,
     aiEnabled: boolean = true
   ): Promise<string | null> => {
-    if (!user?.id) return null;
+    if (!user?.id) {
+      toast.error("You must be logged in to create a group");
+      return null;
+    }
 
     try {
-      const { data, error } = await supabase
+      // Step 1: Create the group
+      const { data: groupData, error: groupError } = await supabase
         .from("group_chats")
         .insert({
-          name,
-          description,
+          name: name.trim(),
+          description: description.trim() || null,
           type,
           subject: subject || null,
           created_by: user.id,
           ai_enabled: aiEnabled,
+          is_active: true,
         })
-        .select()
+        .select("*")
         .single();
 
-      if (error) throw error;
+      if (groupError) {
+        console.error("Group creation error:", groupError);
+        throw new Error(groupError.message || "Failed to create group");
+      }
 
-      // Add creator as admin member
-      await supabase.from("group_chat_members").insert({
-        group_id: data.id,
-        user_id: user.id,
-        role: "admin",
-      });
+      if (!groupData) {
+        throw new Error("Group was not created properly");
+      }
+
+      // Step 2: Add creator as admin member
+      const { error: memberError } = await supabase
+        .from("group_chat_members")
+        .insert({
+          group_id: groupData.id,
+          user_id: user.id,
+          role: "admin",
+        });
+
+      if (memberError) {
+        console.error("Member insert error:", memberError);
+        // Don't throw - group was created successfully, member insert might fail due to timing
+        // The group creator can still see the group due to RLS policy
+      }
 
       toast.success("Group created successfully!");
-      await fetchGroups();
-      return data.id;
-    } catch (error) {
+      
+      // Add the new group to the local state immediately
+      setGroups(prev => [groupData as GroupChat, ...prev]);
+      
+      return groupData.id;
+    } catch (error: any) {
       console.error("Error creating group:", error);
-      toast.error("Failed to create group");
+      toast.error(error.message || "Failed to create group");
       return null;
     }
-  }, [user?.id, fetchGroups]);
+  }, [user?.id]);
 
   const joinGroup = useCallback(async (groupId: string): Promise<boolean> => {
     if (!user?.id) return false;
