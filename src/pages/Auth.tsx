@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GraduationCap, Mail, Lock, User, Loader2, ArrowLeft, AlertCircle } from "lucide-react";
+import { GraduationCap, Mail, Lock, User, Loader2, ArrowLeft, AlertCircle, Construction } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 
 export default function Auth() {
-  const { isAuthenticated, isLoading, signIn, signUp } = useAuth();
-  const { isRegistrationEnabled, isLoading: settingsLoading } = usePlatformSettings();
+  const { isAuthenticated, isLoading, signIn, signUp, role } = useAuth();
+  const { isMaintenanceMode, maintenanceMessage, isRegistrationEnabled, isLoading: settingsLoading } = usePlatformSettings();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
@@ -31,22 +31,57 @@ export default function Auth() {
     );
   }
 
+  // If authenticated, check maintenance mode access
   if (isAuthenticated) {
+    const isAdmin = role === "admin" || role === "founder";
+    
+    // If maintenance mode is on and user is not admin, show maintenance page
+    if (isMaintenanceMode && !isAdmin) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <Card className="max-w-lg w-full text-center">
+            <CardContent className="py-12">
+              <Construction className="w-16 h-16 mx-auto text-primary mb-4" />
+              <h1 className="text-2xl font-bold mb-4">Under Maintenance</h1>
+              <p className="text-muted-foreground mb-6">
+                {maintenanceMessage || "We are currently performing maintenance. Please check back later."}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Only administrators can access the platform during maintenance.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    
     return <Navigate to="/dashboard" replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const { error } = await signIn(loginForm.email, loginForm.password);
-    setIsSubmitting(false);
-    if (!error) {
+    
+    const { error, data } = await signIn(loginForm.email, loginForm.password);
+    
+    if (!error && data?.user) {
+      // After successful login, we need to check if maintenance mode is on
+      // The role will be fetched by useAuth, but we need to wait for it
+      // For now, just navigate - the MaintenanceWrapper will handle the rest
       navigate("/dashboard");
     }
+    
+    setIsSubmitting(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check maintenance mode - block signup during maintenance
+    if (isMaintenanceMode) {
+      toast.error("Registration is disabled during maintenance. Please try again later.");
+      return;
+    }
     
     // Check if registration is enabled
     if (!isRegistrationEnabled) {
@@ -64,6 +99,9 @@ export default function Auth() {
     setIsSubmitting(false);
   };
 
+  // Block access to signup tab during maintenance
+  const canSignUp = !isMaintenanceMode && isRegistrationEnabled;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -73,6 +111,19 @@ export default function Auth() {
           Back to Home
         </Link>
       </header>
+
+      {/* Maintenance Mode Banner */}
+      {isMaintenanceMode && (
+        <div className="mx-4 mb-4">
+          <Alert variant="destructive">
+            <Construction className="h-4 w-4" />
+            <AlertTitle>Maintenance Mode Active</AlertTitle>
+            <AlertDescription>
+              Only administrators can log in during maintenance. New registrations are disabled.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
@@ -93,13 +144,19 @@ export default function Auth() {
           <Card className="glass border-white/10">
             <CardHeader className="text-center pb-4">
               <CardTitle>Welcome</CardTitle>
-              <CardDescription>Sign in to continue your learning journey</CardDescription>
+              <CardDescription>
+                {isMaintenanceMode 
+                  ? "Admin login only during maintenance" 
+                  : "Sign in to continue your learning journey"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6">
                   <TabsTrigger value="login">Sign In</TabsTrigger>
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                  <TabsTrigger value="signup" disabled={isMaintenanceMode}>
+                    Sign Up
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="login">
@@ -149,12 +206,14 @@ export default function Auth() {
 
                 <TabsContent value="signup">
                   {/* Registration disabled warning */}
-                  {!isRegistrationEnabled && (
+                  {!canSignUp && (
                     <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle>Registration Disabled</AlertTitle>
                       <AlertDescription>
-                        New user registration is currently disabled. Please contact the administrator if you need an account.
+                        {isMaintenanceMode 
+                          ? "New registrations are disabled during maintenance."
+                          : "New user registration is currently disabled. Please contact the administrator if you need an account."}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -172,7 +231,7 @@ export default function Auth() {
                           value={signupForm.fullName}
                           onChange={(e) => setSignupForm(prev => ({ ...prev, fullName: e.target.value }))}
                           required
-                          disabled={!isRegistrationEnabled}
+                          disabled={!canSignUp}
                         />
                       </div>
                     </div>
@@ -188,7 +247,7 @@ export default function Auth() {
                           value={signupForm.email}
                           onChange={(e) => setSignupForm(prev => ({ ...prev, email: e.target.value }))}
                           required
-                          disabled={!isRegistrationEnabled}
+                          disabled={!canSignUp}
                         />
                       </div>
                     </div>
@@ -205,14 +264,14 @@ export default function Auth() {
                           onChange={(e) => setSignupForm(prev => ({ ...prev, password: e.target.value }))}
                           required
                           minLength={6}
-                          disabled={!isRegistrationEnabled}
+                          disabled={!canSignUp}
                         />
                       </div>
                     </div>
                     <Button 
                       type="submit" 
                       className="w-full" 
-                      disabled={isSubmitting || !isRegistrationEnabled}
+                      disabled={isSubmitting || !canSignUp}
                     >
                       {isSubmitting ? (
                         <>
