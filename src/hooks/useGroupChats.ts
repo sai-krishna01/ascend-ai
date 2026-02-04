@@ -83,6 +83,8 @@ export function useGroupChats() {
     }
 
     try {
+      console.log("Creating group:", { name, description, type, subject, aiEnabled, userId: user.id });
+      
       // Step 1: Create the group
       const { data: groupData, error: groupError } = await supabase
         .from("group_chats")
@@ -107,7 +109,12 @@ export function useGroupChats() {
         throw new Error("Group was not created properly");
       }
 
+      console.log("Group created successfully:", groupData.id);
+
       // Step 2: Add creator as admin member
+      // Use a small delay to ensure the group is fully committed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const { error: memberError } = await supabase
         .from("group_chat_members")
         .insert({
@@ -118,11 +125,12 @@ export function useGroupChats() {
 
       if (memberError) {
         console.error("Member insert error:", memberError);
-        // Don't throw - group was created successfully, member insert might fail due to timing
-        // The group creator can still see the group due to RLS policy
+        // Log but don't throw - the creator can still see via created_by policy
+        toast.warning("Group created, but you may need to refresh to see it");
+      } else {
+        console.log("Member added successfully");
+        toast.success("Group created successfully!");
       }
-
-      toast.success("Group created successfully!");
       
       // Add the new group to the local state immediately
       setGroups(prev => [groupData as GroupChat, ...prev]);
@@ -130,7 +138,8 @@ export function useGroupChats() {
       return groupData.id;
     } catch (error: any) {
       console.error("Error creating group:", error);
-      toast.error(error.message || "Failed to create group");
+      const message = error?.message || "Failed to create group";
+      toast.error(message);
       return null;
     }
   }, [user?.id]);
