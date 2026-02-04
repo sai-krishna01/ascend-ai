@@ -144,6 +144,31 @@ export function useGroupChats() {
     }
   }, [user?.id]);
 
+  const deleteGroup = useCallback(async (groupId: string): Promise<boolean> => {
+    if (!user?.id) {
+      toast.error("You must be logged in to delete a group");
+      return false;
+    }
+
+    try {
+      // Delete the group (cascade will handle members and messages via RLS)
+      const { error } = await supabase
+        .from("group_chats")
+        .delete()
+        .eq("id", groupId);
+
+      if (error) throw error;
+
+      toast.success("Group deleted successfully");
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      return true;
+    } catch (error: any) {
+      console.error("Error deleting group:", error);
+      toast.error(error.message || "Failed to delete group");
+      return false;
+    }
+  }, [user?.id]);
+
   const joinGroup = useCallback(async (groupId: string): Promise<boolean> => {
     if (!user?.id) return false;
 
@@ -210,14 +235,51 @@ export function useGroupChats() {
     }
   }, []);
 
+  // Realtime subscription for groups
   useEffect(() => {
+    if (!user?.id) return;
+
     fetchGroups();
-  }, [fetchGroups]);
+
+    const channel = supabase
+      .channel("group-chats-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_chats",
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const newGroup = payload.new as GroupChat;
+            setGroups(prev => {
+              if (prev.find(g => g.id === newGroup.id)) return prev;
+              return [newGroup, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const updatedGroup = payload.new as GroupChat;
+            setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old?.id;
+            if (deletedId) {
+              setGroups(prev => prev.filter(g => g.id !== deletedId));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchGroups]);
 
   return {
     groups,
     isLoading,
     createGroup,
+    deleteGroup,
     joinGroup,
     leaveGroup,
     getGroupMembers,

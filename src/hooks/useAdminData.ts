@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface PlatformSetting {
   id: string;
   key: string;
-  value: { enabled?: boolean; message?: string };
+  value: { enabled?: boolean; message?: string } | null;
   description: string | null;
   updated_at: string;
 }
@@ -45,7 +45,7 @@ export function useAdminData() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch platform settings
       const { data: settingsData } = await supabase
@@ -126,23 +126,44 @@ export function useAdminData() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const updateSetting = async (key: string, value: any) => {
     try {
-      const { error } = await supabase
-        .from("platform_settings")
-        .update({ value, updated_at: new Date().toISOString() })
-        .eq("key", key);
+      // Check if setting exists first
+      const existing = settings.find(s => s.key === key);
       
-      if (error) throw error;
+      if (existing) {
+        const { error } = await supabase
+          .from("platform_settings")
+          .update({ value, updated_at: new Date().toISOString() })
+          .eq("key", key);
+        
+        if (error) throw error;
+      } else {
+        // Insert new setting
+        const { error } = await supabase
+          .from("platform_settings")
+          .insert({ key, value, updated_at: new Date().toISOString() });
+        
+        if (error) throw error;
+      }
       
       toast({
         title: "Setting updated",
         description: `${key.replace(/_/g, " ")} has been updated.`,
       });
       
-      fetchData();
+      // Optimistic update
+      setSettings(prev => {
+        const idx = prev.findIndex(s => s.key === key);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], value, updated_at: new Date().toISOString() };
+          return updated;
+        }
+        return [...prev, { id: '', key, value, description: null, updated_at: new Date().toISOString() }];
+      });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -237,7 +258,7 @@ export function useAdminData() {
         description: "System alert has been removed.",
       });
       
-      fetchData();
+      setAlerts(prev => prev.filter(a => a.id !== id));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -252,15 +273,48 @@ export function useAdminData() {
 
     // Subscribe to realtime updates
     const settingsChannel = supabase
-      .channel("platform_settings_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "platform_settings" }, () => {
-        fetchData();
+      .channel("admin-platform_settings_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_settings" }, (payload) => {
+        if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          setSettings(prev => {
+            const newSetting = payload.new as PlatformSetting;
+            const idx = prev.findIndex(s => s.id === newSetting.id || s.key === newSetting.key);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = newSetting;
+              return updated;
+            }
+            return [...prev, newSetting];
+          });
+        } else if (payload.eventType === "DELETE") {
+          setSettings(prev => prev.filter(s => s.id !== payload.old?.id));
+        }
       })
       .subscribe();
 
     const alertsChannel = supabase
-      .channel("system_alerts_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "system_alerts" }, () => {
+      .channel("admin-system_alerts_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "system_alerts" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setAlerts(prev => [payload.new as SystemAlert, ...prev]);
+        } else if (payload.eventType === "UPDATE") {
+          setAlerts(prev => prev.map(a => a.id === (payload.new as SystemAlert).id ? payload.new as SystemAlert : a));
+        } else if (payload.eventType === "DELETE") {
+          setAlerts(prev => prev.filter(a => a.id !== payload.old?.id));
+        }
+      })
+      .subscribe();
+
+    const pagesChannel = supabase
+      .channel("admin-custom_pages_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "custom_pages" }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const profilesChannel = supabase
+      .channel("admin-profiles_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
         fetchData();
       })
       .subscribe();
@@ -268,8 +322,10 @@ export function useAdminData() {
     return () => {
       supabase.removeChannel(settingsChannel);
       supabase.removeChannel(alertsChannel);
+      supabase.removeChannel(pagesChannel);
+      supabase.removeChannel(profilesChannel);
     };
-  }, []);
+  }, [fetchData]);
 
   return {
     settings,
