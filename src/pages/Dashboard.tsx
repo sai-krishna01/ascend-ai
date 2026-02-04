@@ -12,6 +12,7 @@ import { UserDashboard } from "@/components/dashboard/UserDashboard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserLevel, AIMode, SUBJECTS } from "@/lib/types";
+import { ChatSession } from "@/hooks/useChatSessions";
 import { ArrowRight, MessageCircle, LayoutDashboard, BookOpen, Loader2 } from "lucide-react";
 
 type View = "dashboard" | "learn" | "chat";
@@ -19,12 +20,14 @@ type View = "dashboard" | "learn" | "chat";
 export default function Dashboard() {
   const { user, profile, isLoading, isAuthenticated } = useAuth();
   const [view, setView] = useState<View>("dashboard");
+  const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [selectedLevel, setSelectedLevel] = useState<UserLevel | null>(
     (profile?.user_level as UserLevel) || null
   );
   const [selectedMode, setSelectedMode] = useState<AIMode>("teacher");
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [chatSubject, setChatSubject] = useState<string | undefined>();
+  const [resumeSessionId, setResumeSessionId] = useState<string | undefined>();
 
   const handleToggleSubject = useCallback((subjectId: string) => {
     setSelectedSubjects(prev => 
@@ -37,11 +40,28 @@ export default function Dashboard() {
   const handleStartChat = useCallback((subject?: string) => {
     if (!selectedLevel) return;
     setChatSubject(subject);
+    setResumeSessionId(undefined);
     setView("chat");
   }, [selectedLevel]);
 
+  const handleResumeSession = useCallback((session: ChatSession) => {
+    setSelectedMode(session.mode as AIMode);
+    setChatSubject(session.subject || undefined);
+    setResumeSessionId(session.id);
+    setView("chat");
+  }, []);
+
   const handleBackFromChat = useCallback(() => {
-    setView("learn");
+    setView("dashboard");
+    setActiveTab("dashboard");
+    setResumeSessionId(undefined);
+  }, []);
+
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+    if (value === "dashboard" || value === "learn") {
+      setView(value as View);
+    }
   }, []);
 
   const getSubjectName = (id: string) => {
@@ -50,8 +70,11 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -78,8 +101,9 @@ export default function Dashboard() {
                 <ChatInterface
                   mode={selectedMode}
                   level={selectedLevel!}
-                  subject={chatSubject ? getSubjectName(chatSubject) : undefined}
+                  subject={chatSubject ? getSubjectName(chatSubject) : chatSubject}
                   onBack={handleBackFromChat}
+                  existingSessionId={resumeSessionId}
                 />
               </motion.div>
             ) : (
@@ -90,33 +114,33 @@ export default function Dashboard() {
                 exit={{ opacity: 0 }}
               >
                 {/* Welcome Section */}
-                <div className="mb-8">
-                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+                <div className="mb-6 sm:mb-8">
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 sm:mb-2">
                     Welcome back, {profile?.full_name || user?.email?.split("@")[0]}! 👋
                   </h1>
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground text-sm sm:text-base">
                     Continue your learning journey with MentorAI
                   </p>
                 </div>
 
                 {/* Main Navigation */}
-                <Tabs defaultValue="dashboard" className="w-full" onValueChange={(v) => setView(v as View)}>
-                  <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
-                    <TabsTrigger value="dashboard" className="gap-2">
+                <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
+                  <TabsList className="grid w-full max-w-md grid-cols-2 mb-6 sm:mb-8">
+                    <TabsTrigger value="dashboard" className="gap-1.5 sm:gap-2 text-sm">
                       <LayoutDashboard className="w-4 h-4" />
-                      <span className="hidden sm:inline">Dashboard</span>
+                      <span className="hidden xs:inline">Dashboard</span>
                     </TabsTrigger>
-                    <TabsTrigger value="learn" className="gap-2">
+                    <TabsTrigger value="learn" className="gap-1.5 sm:gap-2 text-sm">
                       <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">Start Learning</span>
+                      <span className="hidden xs:inline">Start Learning</span>
                     </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="dashboard" className="mt-0">
-                    <UserDashboard />
+                    <UserDashboard onResumeSession={handleResumeSession} />
                   </TabsContent>
 
-                  <TabsContent value="learn" className="mt-0 space-y-8">
+                  <TabsContent value="learn" className="mt-0 space-y-6 sm:space-y-8">
                     <LevelSelector 
                       selectedLevel={selectedLevel} 
                       onSelectLevel={setSelectedLevel} 
@@ -152,22 +176,22 @@ export default function Dashboard() {
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="py-8 text-center"
+                        className="py-6 sm:py-8 text-center"
                       >
-                        <h2 className="text-xl sm:text-2xl font-bold mb-4">
+                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4">
                           Ready to Start Learning?
                         </h2>
                         
-                        <div className="flex flex-wrap gap-3 justify-center mb-6">
+                        <div className="flex flex-wrap gap-2 sm:gap-3 justify-center mb-4 sm:mb-6">
                           {selectedSubjects.length > 0 ? (
                             selectedSubjects.map(subjectId => (
                               <Button
                                 key={subjectId}
                                 variant="secondary"
                                 onClick={() => handleStartChat(subjectId)}
-                                className="gap-2"
+                                className="gap-1.5 sm:gap-2 text-sm"
                               >
-                                <MessageCircle className="w-4 h-4" />
+                                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 Start with {getSubjectName(subjectId)}
                               </Button>
                             ))
