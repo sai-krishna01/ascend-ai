@@ -42,6 +42,7 @@ export interface GroupMessage {
   file_name: string | null;
   file_type: string | null;
   created_at: string;
+  reply_to_id: string | null;
 }
 
 export function useGroupChats() {
@@ -50,7 +51,10 @@ export function useGroupChats() {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchGroups = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setGroups([]);
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -82,14 +86,35 @@ export function useGroupChats() {
       return null;
     }
 
+    // Validate input
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error("Group name is required");
+      return null;
+    }
+
     try {
-      console.log("Creating group:", { name, description, type, subject, aiEnabled, userId: user.id });
+      console.log("Creating group:", { name: trimmedName, description, type, subject, aiEnabled, userId: user.id });
       
+      // Check for duplicate group names
+      const { data: existing } = await supabase
+        .from("group_chats")
+        .select("id")
+        .eq("name", trimmedName)
+        .eq("created_by", user.id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (existing) {
+        toast.error("You already have a group with this name");
+        return null;
+      }
+
       // Step 1: Create the group
       const { data: groupData, error: groupError } = await supabase
         .from("group_chats")
         .insert({
-          name: name.trim(),
+          name: trimmedName,
           description: description.trim() || null,
           type,
           subject: subject || null,
@@ -112,9 +137,6 @@ export function useGroupChats() {
       console.log("Group created successfully:", groupData.id);
 
       // Step 2: Add creator as admin member
-      // Use a small delay to ensure the group is fully committed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const { error: memberError } = await supabase
         .from("group_chat_members")
         .insert({
@@ -126,15 +148,16 @@ export function useGroupChats() {
       if (memberError) {
         console.error("Member insert error:", memberError);
         // Log but don't throw - the creator can still see via created_by policy
-        toast.warning("Group created, but you may need to refresh to see it");
-      } else {
-        console.log("Member added successfully");
-        toast.success("Group created successfully!");
       }
-      
+
       // Add the new group to the local state immediately
-      setGroups(prev => [groupData as GroupChat, ...prev]);
+      setGroups(prev => {
+        // Prevent duplicates
+        if (prev.some(g => g.id === groupData.id)) return prev;
+        return [groupData as GroupChat, ...prev];
+      });
       
+      toast.success("Group created successfully!");
       return groupData.id;
     } catch (error: any) {
       console.error("Error creating group:", error);
@@ -151,26 +174,35 @@ export function useGroupChats() {
     }
 
     try {
+      // Optimistically remove from UI first
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+
       // Delete the group (cascade will handle members and messages via RLS)
       const { error } = await supabase
         .from("group_chats")
         .delete()
         .eq("id", groupId);
 
-      if (error) throw error;
+      if (error) {
+        // Revert on error - refetch groups
+        fetchGroups();
+        throw error;
+      }
 
       toast.success("Group deleted successfully");
-      setGroups(prev => prev.filter(g => g.id !== groupId));
       return true;
     } catch (error: any) {
       console.error("Error deleting group:", error);
       toast.error(error.message || "Failed to delete group");
       return false;
     }
-  }, [user?.id]);
+  }, [user?.id, fetchGroups]);
 
   const joinGroup = useCallback(async (groupId: string): Promise<boolean> => {
-    if (!user?.id) return false;
+    if (!user?.id) {
+      toast.error("You must be logged in to join a group");
+      return false;
+    }
 
     try {
       const { error } = await supabase
@@ -219,6 +251,60 @@ export function useGroupChats() {
       return false;
     }
   }, [user?.id, fetchGroups]);
+
+  const addMemberToGroup = useCallback(async (
+    groupId: string, 
+    userId: string, 
+    memberRole: "admin" | "moderator" | "member" = "member"
+  ): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    try {
+      const { error } = await supabase
+        .from("group_chat_members")
+        .insert({
+          group_id: groupId,
+          user_id: userId,
+          role: memberRole,
+        });
+
+      if (error) {
+        if (error.code === "23505") {
+          toast.info("User is already a member of this group");
+          return true;
+        }
+        throw error;
+      }
+
+      toast.success("Member added successfully!");
+      return true;
+    } catch (error) {
+      console.error("Error adding member:", error);
+      toast.error("Failed to add member");
+      return false;
+    }
+  }, [user?.id]);
+
+  const removeMemberFromGroup = useCallback(async (groupId: string, userId: string): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    try {
+      const { error } = await supabase
+        .from("group_chat_members")
+        .delete()
+        .eq("group_id", groupId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      toast.success("Member removed successfully");
+      return true;
+    } catch (error) {
+      console.error("Error removing member:", error);
+      toast.error("Failed to remove member");
+      return false;
+    }
+  }, [user?.id]);
 
   const getGroupMembers = useCallback(async (groupId: string): Promise<GroupMember[]> => {
     try {
@@ -282,6 +368,8 @@ export function useGroupChats() {
     deleteGroup,
     joinGroup,
     leaveGroup,
+    addMemberToGroup,
+    removeMemberFromGroup,
     getGroupMembers,
     refetch: fetchGroups,
   };
@@ -293,7 +381,10 @@ export function useGroupMessages(groupId: string | null) {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchMessages = useCallback(async () => {
-    if (!groupId) return;
+    if (!groupId) {
+      setMessages([]);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -302,7 +393,7 @@ export function useGroupMessages(groupId: string | null) {
         .select("*")
         .eq("group_id", groupId)
         .order("created_at", { ascending: true })
-        .limit(100);
+        .limit(200);
 
       if (error) throw error;
       setMessages((data as GroupMessage[]) || []);
@@ -318,7 +409,8 @@ export function useGroupMessages(groupId: string | null) {
     messageType: "text" | "file" | "link" = "text",
     fileUrl?: string,
     fileName?: string,
-    fileType?: string
+    fileType?: string,
+    replyToId?: string
   ): Promise<boolean> => {
     if (!groupId || !user?.id) return false;
 
@@ -335,6 +427,7 @@ export function useGroupMessages(groupId: string | null) {
           file_url: fileUrl || null,
           file_name: fileName || null,
           file_type: fileType || null,
+          reply_to_id: replyToId || null,
         });
 
       if (error) throw error;
@@ -386,7 +479,27 @@ export function useGroupMessages(groupId: string | null) {
           filter: `group_id=eq.${groupId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as GroupMessage]);
+          setMessages((prev) => {
+            const newMsg = payload.new as GroupMessage;
+            // Prevent duplicates
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "group_chat_messages",
+          filter: `group_id=eq.${groupId}`,
+        },
+        (payload) => {
+          const deletedId = payload.old?.id;
+          if (deletedId) {
+            setMessages(prev => prev.filter(m => m.id !== deletedId));
+          }
         }
       )
       .subscribe();

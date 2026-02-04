@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SystemAlertBanner } from "@/components/layout/SystemAlertBanner";
 import { MaintenanceWrapper } from "@/components/layout/MaintenanceWrapper";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -22,6 +23,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 1000 * 60, // 1 minute
     },
   },
 });
@@ -35,16 +37,42 @@ const App = () => (
         <MaintenanceWrapper>
           <SystemAlertBanner />
           <Routes>
+            {/* Public routes */}
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/admin" element={<AdminPanel />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/groups" element={<GroupChats />} />
-            <Route path="/ai-tools" element={<AITools />} />
             <Route path="/pricing" element={<Pricing />} />
+            
+            {/* Protected routes - require authentication */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/groups" element={
+              <ProtectedRoute>
+                <GroupChats />
+              </ProtectedRoute>
+            } />
+            <Route path="/ai-tools" element={
+              <ProtectedRoute>
+                <AITools />
+              </ProtectedRoute>
+            } />
+            
+            {/* Admin only routes */}
+            <Route path="/admin" element={
+              <ProtectedRoute allowedRoles={["admin", "founder"]}>
+                <AdminPanel />
+              </ProtectedRoute>
+            } />
+            
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
