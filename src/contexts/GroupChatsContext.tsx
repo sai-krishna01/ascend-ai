@@ -48,18 +48,32 @@ interface GroupChatsContextType {
 const GroupChatsContext = createContext<GroupChatsContextType | null>(null);
 
 export function GroupChatsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [groups, setGroups] = useState<GroupChat[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [previousUserId, setPreviousUserId] = useState<string | null>(null);
+
+  // Clear state when user changes (logout or switch)
+  useEffect(() => {
+    const currentUserId = user?.id || null;
+    
+    if (previousUserId !== currentUserId) {
+      // User changed - clear all cached groups immediately
+      setGroups([]);
+      setPreviousUserId(currentUserId);
+    }
+  }, [user?.id, previousUserId]);
 
   const fetchGroups = useCallback(async () => {
     if (!user?.id) {
       setGroups([]);
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
+      // Fetch groups where user is creator OR member (RLS handles this)
       const { data, error } = await supabase
         .from("group_chats")
         .select("*")
@@ -70,6 +84,7 @@ export function GroupChatsProvider({ children }: { children: ReactNode }) {
       setGroups((data as GroupChat[]) || []);
     } catch (error) {
       console.error("Error fetching groups:", error);
+      setGroups([]);
     } finally {
       setIsLoading(false);
     }
@@ -297,14 +312,23 @@ export function GroupChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Real-time subscription (singleton)
+  // Real-time subscription (singleton) - refetch on auth change
   useEffect(() => {
-    if (!user?.id) return;
+    // Always clean up previous subscriptions
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
+    if (!user?.id || !isAuthenticated) {
+      // Clear groups when not authenticated
+      setGroups([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Fetch fresh data for new user
     fetchGroups();
 
-    const channel = supabase
-      .channel("group-chats-provider")
+    channel = supabase
+      .channel(`group-chats-provider-${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -333,9 +357,11 @@ export function GroupChatsProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [user?.id, fetchGroups]);
+  }, [user?.id, isAuthenticated, fetchGroups]);
 
   const value = useMemo(
     () => ({

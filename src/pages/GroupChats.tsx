@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -6,14 +6,18 @@ import { GroupChatList } from "@/components/chat/GroupChatList";
 import { GroupChatInterface } from "@/components/chat/GroupChatInterface";
 import { useAuth } from "@/hooks/useAuth";
 import { useAISettings } from "@/hooks/useAISettings";
-import { Loader2, Ban } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 export default function GroupChats() {
-  const { isLoading: authLoading, isAuthenticated, role } = useAuth();
-  const { isLoading: settingsLoading, canAccessAIGroupChat, isAIGloballyEnabled } = useAISettings();
+  const { isLoading: authLoading, isAuthenticated, user, role } = useAuth();
+  const { isLoading: settingsLoading, canAccessAIGroupChat } = useAISettings();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
+  // Reset selected group when user changes (logout/login)
+  useEffect(() => {
+    setSelectedGroupId(null);
+  }, [user?.id]);
 
   if (authLoading || settingsLoading) {
     return (
@@ -27,7 +31,7 @@ export default function GroupChats() {
     return <Navigate to="/auth" replace />;
   }
 
-  // Check AI access for non-admin users
+  // Check AI access based on role permissions
   const aiEnabled = canAccessAIGroupChat();
   const isAdmin = role === "admin" || role === "founder";
 
