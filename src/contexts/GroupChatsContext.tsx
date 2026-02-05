@@ -1,9 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useAuth } from "./useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
-// Re-export types for backwards compatibility
 export interface GroupChat {
   id: string;
   name: string;
@@ -25,30 +24,30 @@ export interface GroupMember {
   role: "admin" | "moderator" | "member";
   joined_at: string;
   last_read_at: string | null;
-  profile?: {
-    full_name: string | null;
-    avatar_url: string | null;
-  };
 }
 
-export interface GroupMessage {
-  id: string;
-  group_id: string;
-  user_id: string | null;
-  sender_name: string | null;
-  sender_type: "user" | "ai" | "system";
-  content: string;
-  message_type: "text" | "file" | "link" | "ai_response";
-  file_url: string | null;
-  file_name: string | null;
-  file_type: string | null;
-  created_at: string;
-  reply_to_id: string | null;
+interface GroupChatsContextType {
+  groups: GroupChat[];
+  isLoading: boolean;
+  createGroup: (
+    name: string,
+    description: string,
+    type: "custom" | "subject" | "course",
+    subject?: string,
+    aiEnabled?: boolean
+  ) => Promise<string | null>;
+  deleteGroup: (groupId: string) => Promise<boolean>;
+  joinGroup: (groupId: string) => Promise<boolean>;
+  leaveGroup: (groupId: string) => Promise<boolean>;
+  addMemberToGroup: (groupId: string, userId: string, role?: "admin" | "moderator" | "member") => Promise<boolean>;
+  removeMemberFromGroup: (groupId: string, userId: string) => Promise<boolean>;
+  getGroupMembers: (groupId: string) => Promise<GroupMember[]>;
+  refetch: () => Promise<void>;
 }
 
-// Hook that provides group chat functionality
-// This is kept for backwards compatibility - components can use this or the context directly
-export function useGroupChats() {
+const GroupChatsContext = createContext<GroupChatsContextType | null>(null);
+
+export function GroupChatsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [groups, setGroups] = useState<GroupChat[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -163,7 +162,7 @@ export function useGroupChats() {
       setGroups((prev) => prev.filter((g) => g.id !== groupId));
 
       try {
-        // Call backend function for cascade delete with verification
+        // Call backend function for cascade delete
         const { data, error } = await supabase.functions.invoke("group-chat-ops", {
           body: { action: "delete_group", groupId },
         });
@@ -171,18 +170,11 @@ export function useGroupChats() {
         if (error) throw error;
         if (!data?.ok) throw new Error(data?.error || "Delete failed");
 
-        // Verify deletion by checking DB
-        const { data: stillExists } = await supabase.from("group_chats").select("id").eq("id", groupId).maybeSingle();
-
-        if (stillExists) {
-          throw new Error("Group still exists after deletion");
-        }
-
         toast.success("Group deleted");
         return true;
       } catch (error: any) {
         console.error("Error deleting group:", error);
-        // Revert on failure
+        // Revert
         if (groupToDelete) {
           setGroups((prev) => [groupToDelete, ...prev]);
         }
@@ -298,21 +290,21 @@ export function useGroupChats() {
       const { data, error } = await supabase.from("group_chat_members").select("*").eq("group_id", groupId);
 
       if (error) throw error;
-      return (data as unknown as GroupMember[]) || [];
+      return (data as GroupMember[]) || [];
     } catch (error) {
       console.error("Error fetching members:", error);
       return [];
     }
   }, []);
 
-  // Real-time subscription
+  // Real-time subscription (singleton)
   useEffect(() => {
     if (!user?.id) return;
 
     fetchGroups();
 
     const channel = supabase
-      .channel("group-chats-realtime")
+      .channel("group-chats-provider")
       .on(
         "postgres_changes",
         {
@@ -328,8 +320,8 @@ export function useGroupChats() {
               return [newGroup, ...prev];
             });
           } else if (payload.eventType === "UPDATE") {
-            const updatedGroup = payload.new as GroupChat;
-            setGroups((prev) => prev.map((g) => (g.id === updatedGroup.id ? updatedGroup : g)));
+            const updated = payload.new as GroupChat;
+            setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
           } else if (payload.eventType === "DELETE") {
             const deletedId = payload.old?.id;
             if (deletedId) {
@@ -345,145 +337,29 @@ export function useGroupChats() {
     };
   }, [user?.id, fetchGroups]);
 
-  return {
-    groups,
-    isLoading,
-    createGroup,
-    deleteGroup,
-    joinGroup,
-    leaveGroup,
-    addMemberToGroup,
-    removeMemberFromGroup,
-    getGroupMembers,
-    refetch: fetchGroups,
-  };
+  const value = useMemo(
+    () => ({
+      groups,
+      isLoading,
+      createGroup,
+      deleteGroup,
+      joinGroup,
+      leaveGroup,
+      addMemberToGroup,
+      removeMemberFromGroup,
+      getGroupMembers,
+      refetch: fetchGroups,
+    }),
+    [groups, isLoading, createGroup, deleteGroup, joinGroup, leaveGroup, addMemberToGroup, removeMemberFromGroup, getGroupMembers, fetchGroups]
+  );
+
+  return <GroupChatsContext.Provider value={value}>{children}</GroupChatsContext.Provider>;
 }
 
-export function useGroupMessages(groupId: string | null) {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const fetchMessages = useCallback(async () => {
-    if (!groupId) {
-      setMessages([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("group_chat_messages")
-        .select("*")
-        .eq("group_id", groupId)
-        .order("created_at", { ascending: true })
-        .limit(200);
-
-      if (error) throw error;
-      setMessages((data as GroupMessage[]) || []);
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [groupId]);
-
-  const sendMessage = useCallback(
-    async (
-      content: string,
-      messageType: "text" | "file" | "link" = "text",
-      fileUrl?: string,
-      fileName?: string,
-      fileType?: string,
-      replyToId?: string
-    ): Promise<boolean> => {
-      if (!groupId || !user?.id) return false;
-
-      try {
-        const { error } = await supabase.from("group_chat_messages").insert({
-          group_id: groupId,
-          user_id: user.id,
-          sender_name: user.email?.split("@")[0] || "User",
-          sender_type: "user",
-          content,
-          message_type: messageType,
-          file_url: fileUrl || null,
-          file_name: fileName || null,
-          file_type: fileType || null,
-          reply_to_id: replyToId || null,
-        });
-
-        if (error) throw error;
-        return true;
-      } catch (error) {
-        console.error("Error sending message:", error);
-        toast.error("Failed to send message");
-        return false;
-      }
-    },
-    [groupId, user?.id, user?.email]
-  );
-
-  const sendAIMessage = useCallback(
-    async (content: string): Promise<boolean> => {
-      if (!groupId) return false;
-
-      try {
-        const { error } = await supabase.from("group_chat_messages").insert({
-          group_id: groupId,
-          user_id: null,
-          sender_name: "MentorAI",
-          sender_type: "ai",
-          content,
-          message_type: "ai_response",
-        });
-
-        if (error) throw error;
-        return true;
-      } catch (error) {
-        console.error("Error sending AI message:", error);
-        return false;
-      }
-    },
-    [groupId]
-  );
-
-  // Real-time subscription
-  useEffect(() => {
-    if (!groupId) return;
-
-    fetchMessages();
-
-    const channel = supabase
-      .channel(`group-messages-${groupId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "group_chat_messages",
-          filter: `group_id=eq.${groupId}`,
-        },
-        (payload) => {
-          setMessages((prev) => {
-            const newMsg = payload.new as GroupMessage;
-            if (prev.find((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [groupId, fetchMessages]);
-
-  return {
-    messages,
-    isLoading,
-    sendMessage,
-    sendAIMessage,
-    refetch: fetchMessages,
-  };
+export function useGroupChatsContext() {
+  const context = useContext(GroupChatsContext);
+  if (!context) {
+    throw new Error("useGroupChatsContext must be used within GroupChatsProvider");
+  }
+  return context;
 }
