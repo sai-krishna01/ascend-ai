@@ -325,7 +325,7 @@ export function ChatInterface({
               Hello! I'm your {currentMode?.name}
             </h3>
             <p className="text-muted-foreground text-xs sm:text-sm mb-4 max-w-md">
-              {currentMode?.description}. You can attach files (PDF, DOC, images) or links for context!
+              {currentMode?.description}.{fileUploadAllowed || linkUploadAllowed ? " You can attach files or links for context!" : ""}
             </p>
             
             {/* Suggested prompts */}
@@ -446,70 +446,72 @@ export function ChatInterface({
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-3 sm:p-4 border-t bg-background/50">
         <div className="flex gap-2">
-           {/* Attachment buttons - only show if enabled */}
-           <div className="flex gap-1 shrink-0">
-             {fileUploadAllowed && (
-               <Button
-                 type="button"
-                 variant="ghost"
-                 size="icon"
-                 className="h-11 w-11 sm:h-12 sm:w-12"
-                 onClick={() => fileInputRef.current?.click()}
-                 disabled={isUploading}
-                 title="Attach file"
-               >
-                 {isUploading ? (
-                   <Loader2 className="w-4 h-4 animate-spin" />
-                 ) : (
-                   <Paperclip className="w-4 h-4" />
-                 )}
-               </Button>
-             )}
-             
-             {linkUploadAllowed && (
-               <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-                 <DialogTrigger asChild>
-                   <Button
-                     type="button"
-                     variant="ghost"
-                     size="icon"
-                     className="h-11 w-11 sm:h-12 sm:w-12"
-                     title="Add link"
-                   >
-                     <Link2 className="w-4 h-4" />
-                   </Button>
-                 </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Link</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="link-url">URL</Label>
-                    <Input
-                      id="link-url"
-                      placeholder="https://example.com or YouTube link"
-                      value={linkUrl}
-                      onChange={(e) => setLinkUrl(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="link-title">Title (optional)</Label>
-                    <Input
-                      id="link-title"
-                      placeholder="Link description"
-                      value={linkTitle}
-                      onChange={(e) => setLinkTitle(e.target.value)}
-                    />
-                  </div>
-                  <Button onClick={handleAddLink} className="w-full">
-                    Add Link
-                  </Button>
-                </div>
-              </DialogContent>
-               </Dialog>
-             )}
-          </div>
+          {/* Attachment buttons - COMPLETELY HIDDEN when disabled */}
+          {(fileUploadAllowed || linkUploadAllowed) && (
+            <div className="flex gap-1 shrink-0">
+              {fileUploadAllowed && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 sm:h-12 sm:w-12"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  title="Attach file"
+                >
+                  {isUploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
+              
+              {linkUploadAllowed && (
+                <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 sm:h-12 sm:w-12"
+                      title="Add link"
+                    >
+                      <Link2 className="w-4 h-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Link</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="link-url">URL</Label>
+                        <Input
+                          id="link-url"
+                          placeholder="https://example.com or YouTube link"
+                          value={linkUrl}
+                          onChange={(e) => setLinkUrl(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="link-title">Title (optional)</Label>
+                        <Input
+                          id="link-title"
+                          placeholder="Link description"
+                          value={linkTitle}
+                          onChange={(e) => setLinkTitle(e.target.value)}
+                        />
+                      </div>
+                      <Button onClick={handleAddLink} className="w-full">
+                        Add Link
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          )}
 
           <textarea
             ref={inputRef}

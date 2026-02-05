@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SystemAlertBanner } from "@/components/layout/SystemAlertBanner";
 import { MaintenanceWrapper } from "@/components/layout/MaintenanceWrapper";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { GroupChatsProvider } from "@/contexts/GroupChatsContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -16,15 +17,15 @@ import Contact from "./pages/Contact";
 import GroupChats from "./pages/GroupChats";
 import AITools from "./pages/AITools";
 import Pricing from "./pages/Pricing";
- import NotFound from "./pages/NotFound";
- import CustomPage from "./pages/CustomPage";
+import NotFound from "./pages/NotFound";
+import CustomPage from "./pages/CustomPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60, // 1 minute
+      staleTime: 1000 * 60 * 2, // 2 minutes for better caching
     },
   },
 });
@@ -35,9 +36,10 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <MaintenanceWrapper>
-          <SystemAlertBanner />
-          <Routes>
+        <GroupChatsProvider>
+          <MaintenanceWrapper>
+            <SystemAlertBanner />
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -77,10 +79,11 @@ const App = () => (
              {/* Custom pages route */}
              <Route path="/p/:slug" element={<CustomPage />} />
              
-             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-             <Route path="*" element={<NotFound />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
-        </MaintenanceWrapper>
+          </MaintenanceWrapper>
+        </GroupChatsProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
