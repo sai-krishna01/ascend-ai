@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useFileUpload, UploadedFile } from "@/hooks/useFileUpload";
+import { useAISettings } from "@/hooks/useAISettings";
 import { SUBJECTS } from "@/lib/types";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
@@ -56,6 +57,10 @@ export function AIFeaturesPanel() {
 
   const { uploadFile, isUploading, getFileIcon, formatFileSize } = useFileUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { canUploadFiles, canUploadLinks } = useAISettings();
+  const fileUploadAllowed = canUploadFiles();
+  const linkUploadAllowed = canUploadLinks();
 
   const [activeTab, setActiveTab] = useState("doubt");
   const [result, setResult] = useState<string>("");
@@ -322,75 +327,82 @@ export function AIFeaturesPanel() {
               </div>
 
               {/* File Upload Section */}
-              <div className="space-y-2">
-                <Label>Attach Files or Links (optional)</Label>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept=".pdf,.doc,.docx,.txt,image/*"
-                    multiple
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-1" />
-                    )}
-                    Upload File
-                  </Button>
-                  <div className="flex-1 flex gap-2">
-                    <Input
-                      placeholder="Paste YouTube or resource link..."
-                      value={externalLink}
-                      onChange={(e) => setExternalLink(e.target.value)}
-                      className="flex-1"
+              {/* File Upload Section - Only show if enabled */}
+              {(fileUploadAllowed || linkUploadAllowed) && (
+                <div className="space-y-2">
+                  <Label>Attach Files or Links (optional)</Label>
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept=".pdf,.doc,.docx,.txt,image/*"
+                      multiple
+                      className="hidden"
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addExternalLink}
-                    >
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Attached Files List */}
-                {attachedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {attachedFiles.map((file, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1 px-2 py-1">
-                        <span>{getFileIcon(file.type)}</span>
-                        <span className="max-w-[150px] truncate text-xs">
-                          {file.type === "external/link" ? new URL(file.url).hostname : file.name}
-                        </span>
-                        {file.size > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            ({formatFileSize(file.size)})
-                          </span>
+                    {fileUploadAllowed && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-1" />
                         )}
-                        <button
+                        Upload File
+                      </Button>
+                    )}
+                    {linkUploadAllowed && (
+                      <div className="flex-1 flex gap-2">
+                        <Input
+                          placeholder="Paste YouTube or resource link..."
+                          value={externalLink}
+                          onChange={(e) => setExternalLink(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
                           type="button"
-                          onClick={() => removeFile(index)}
-                          className="ml-1 hover:text-destructive"
+                          variant="outline"
+                          size="sm"
+                          onClick={addExternalLink}
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                          <LinkIcon className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+
+                  {/* Attached Files List */}
+                  {attachedFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {attachedFiles.map((file, index) => (
+                        <Badge key={index} variant="secondary" className="flex items-center gap-1 px-2 py-1">
+                          <span>{getFileIcon(file.type)}</span>
+                          <span className="max-w-[150px] truncate text-xs">
+                            {file.type === "external/link" ? new URL(file.url).hostname : file.name}
+                          </span>
+                          {file.size > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              ({formatFileSize(file.size)})
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <Button onClick={handleSolveDoubt} disabled={isLoading} className="w-full">
                 {isLoading ? (
