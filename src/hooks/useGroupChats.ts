@@ -31,12 +31,12 @@ export function useGroupChats() {
 
 // Separate hook for group messages - independent of group list state
 export function useGroupMessages(groupId: string | null) {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchMessages = useCallback(async () => {
-    if (!groupId) {
+    if (!groupId || !user?.id || !isAuthenticated) {
       setMessages([]);
       return;
     }
@@ -54,10 +54,11 @@ export function useGroupMessages(groupId: string | null) {
       setMessages((data as GroupMessage[]) || []);
     } catch (error) {
       console.error("Error fetching messages:", error);
+      setMessages([]);
     } finally {
       setIsLoading(false);
     }
-  }, [groupId]);
+  }, [groupId, user?.id, isAuthenticated]);
 
   const sendMessage = useCallback(
     async (
@@ -119,14 +120,17 @@ export function useGroupMessages(groupId: string | null) {
     [groupId]
   );
 
-  // Real-time subscription for messages
+  // Real-time subscription for messages - clear on auth change
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !user?.id || !isAuthenticated) {
+      setMessages([]);
+      return;
+    }
 
     fetchMessages();
 
     const channel = supabase
-      .channel(`group-messages-${groupId}`)
+      .channel(`group-messages-${groupId}-${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -148,7 +152,7 @@ export function useGroupMessages(groupId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupId, fetchMessages]);
+  }, [groupId, user?.id, isAuthenticated, fetchMessages]);
 
   return {
     messages,
