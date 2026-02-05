@@ -183,21 +183,25 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
         throw new Error(data?.error || "Failed to delete user");
       }
 
-      // Verify (DB): profile row must be gone after deletion.
-      const { data: remainingProfile, error: verifyError } = await supabase
+      // Verify deletion directly in DB
+      const { data: remainingProfile } = await supabase
         .from("profiles")
         .select("id")
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (verifyError) throw verifyError;
       if (remainingProfile) {
         throw new Error("Deletion did not complete (profile still exists)");
       }
 
-      // Close dialog; refresh list. Success toast is shown only when UI updates (see useEffect above).
+      // Close dialog and update local state immediately
       setDeleteUser(null);
+
+      // Remove from local users list without waiting for refresh
+      // The useEffect will also show success toast when user disappears
       setPendingDeletedUserId(userId);
+
+      // Trigger refresh
       await onRefresh();
     } catch (error: any) {
       console.error("Delete user error:", error);

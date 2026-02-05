@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useChatSessions, ChatMessage } from "./useChatSessions";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { AIMode, UserLevel, Message } from "@/lib/types";
 
@@ -126,6 +127,15 @@ export function usePersistentChat({
         attachments.links = links;
       }
 
+      // Fetch AI settings to pass to backend for toggle enforcement
+      const { data: settingsData } = await supabase
+        .from("platform_settings")
+        .select("key, value")
+        .eq("key", "ai_controls")
+        .maybeSingle();
+
+      const aiSettings = settingsData?.value as Record<string, boolean> | null;
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -139,6 +149,7 @@ export function usePersistentChat({
           subject,
           language,
           attachments: Object.keys(attachments).length > 0 ? attachments : undefined,
+          aiSettings: aiSettings || undefined,
         }),
       });
 
