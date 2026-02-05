@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -31,10 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Users, RefreshCw, Loader2, Edit2, Shield, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
- import { toast } from "sonner";
- 
- // Create an edge function for admin user deletion would be better,
- // but for now we do a proper cascade delete of user data
+import { toast } from "sonner";
 import type { AppRole } from "@/lib/types";
 
 interface User {
@@ -65,6 +62,18 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
   // Delete user state
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingDeletedUserId, setPendingDeletedUserId] = useState<string | null>(null);
+
+  // Only show a "success" toast once the refreshed UI no longer contains the user.
+  useEffect(() => {
+    if (!pendingDeletedUserId) return;
+
+    const stillExistsInUI = users.some((u) => u.user_id === pendingDeletedUserId);
+    if (!stillExistsInUI) {
+      toast.success("User deleted");
+      setPendingDeletedUserId(null);
+    }
+  }, [pendingDeletedUserId, users]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -158,107 +167,46 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
     }
   };
 
-   const handleDeleteUser = async () => {
-     if (!deleteUser) return;
- 
-     setIsDeleting(true);
-     try {
-       const userId = deleteUser.user_id;
-       
-       // Delete all user-related data in parallel where possible
-       // First, delete items that have foreign key dependencies
-       
-       // Delete chat messages from user's sessions
-       const { data: sessions } = await supabase
-         .from("chat_sessions")
-         .select("id")
-         .eq("user_id", userId);
-       
-       if (sessions && sessions.length > 0) {
-         const sessionIds = sessions.map(s => s.id);
-         await supabase
-           .from("chat_messages")
-           .delete()
-           .in("session_id", sessionIds);
-       }
-       
-       // Delete user's chat sessions
-       await supabase
-         .from("chat_sessions")
-         .delete()
-         .eq("user_id", userId);
-       
-       // Delete group chat memberships
-       await supabase
-         .from("group_chat_members")
-         .delete()
-         .eq("user_id", userId);
-       
-       // Delete AI interactions
-       await supabase
-         .from("ai_interactions")
-         .delete()
-         .eq("user_id", userId);
-       
-       // Delete learning progress
-       await supabase
-         .from("learning_progress")
-         .delete()
-         .eq("user_id", userId);
-       
-       // Delete shared notes
-       await supabase
-         .from("shared_notes")
-         .delete()
-         .eq("created_by", userId);
-       
-       // Delete study resources
-       await supabase
-         .from("study_resources")
-         .delete()
-         .eq("uploaded_by", userId);
-       
-       // Delete user subscriptions
-       await supabase
-         .from("user_subscriptions")
-         .delete()
-         .eq("user_id", userId);
-       
-       // Delete user role
-       const { error: roleError } = await supabase
-         .from("user_roles")
-         .delete()
-         .eq("user_id", userId);
-       
-       if (roleError) {
-         console.error("Error deleting role:", roleError);
-       }
- 
-       // Delete user profile
-       const { error: profileError } = await supabase
-         .from("profiles")
-         .delete()
-         .eq("user_id", userId);
-       
-       if (profileError) {
-         console.error("Error deleting profile:", profileError);
-         throw profileError;
-       }
- 
-       // Note: We can't delete from auth.users directly from client
-       // The user will remain in auth but without profile/role
-       // They won't be able to use the platform anymore
-       
-       toast.success("User completely removed from platform");
-       setDeleteUser(null);
-       onRefresh();
-     } catch (error: any) {
-       console.error("Delete user error:", error);
-       toast.error(error.message || "Failed to delete user");
-     } finally {
-       setIsDeleting(false);
-     }
-   };
+  const handleDeleteUser = async () => {
+    if (!deleteUser) return;
+
+    setIsDeleting(true);
+    const userId = deleteUser.user_id;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+        body: { userId },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) {
+        throw new Error(data?.error || "Failed to delete user");
+      }
+
+      // Verify (DB): profile row must be gone after deletion.
+      const { data: remainingProfile, error: verifyError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (verifyError) throw verifyError;
+      if (remainingProfile) {
+        throw new Error("Deletion did not complete (profile still exists)");
+      }
+
+      // Close dialog; refresh list. Success toast is shown only when UI updates (see useEffect above).
+      setDeleteUser(null);
+      setPendingDeletedUserId(userId);
+      await onRefresh();
+    } catch (error: any) {
+      console.error("Delete user error:", error);
+      setPendingDeletedUserId(null);
+      toast.error(error?.message || "Failed to delete user");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
