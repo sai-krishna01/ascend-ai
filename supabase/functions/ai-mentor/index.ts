@@ -453,56 +453,165 @@ serve(async (req) => {
 - Messages: ${messages.length}
 `);
 
-    // Call Lovable AI Gateway (uses google/gemini-3-flash-preview by default)
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...enrichedMessages.map(m => ({ role: m.role, content: m.content })),
-        ],
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`AI Gateway error: ${response.status}`, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please contact support." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Stream the response directly
-    return new Response(response.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+     // Get Gemini API key (preferred) or fall back to Lovable AI
+     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+     let response: Response;
+     let usedGemini = false;
+ 
+     if (GEMINI_API_KEY) {
+       // Try Gemini first
+       console.log("Attempting Gemini API...");
+       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
+       
+       // Convert messages to Gemini format
+       const geminiContents = enrichedMessages.map((msg) => ({
+         role: msg.role === "assistant" ? "model" : "user",
+         parts: [{ text: msg.content }],
+       }));
+       
+       try {
+         response = await fetch(geminiUrl, {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             contents: geminiContents,
+             systemInstruction: { parts: [{ text: systemPrompt }] },
+             generationConfig: {
+               maxOutputTokens: 4096,
+               temperature: 0.7,
+             },
+           }),
+         });
+         
+         if (response.ok) {
+           usedGemini = true;
+           console.log("Gemini API success, streaming response...");
+         } else {
+           const errText = await response.text();
+           console.error(`Gemini API error ${response.status}: ${errText}`);
+         }
+       } catch (e) {
+         console.error("Gemini API fetch error:", e);
+       }
+     }
+ 
+     // Fall back to Lovable AI if Gemini failed or not available
+     if (!usedGemini) {
+       console.log("Using Lovable AI Gateway...");
+       response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+         method: "POST",
+         headers: {
+           Authorization: `Bearer ${LOVABLE_API_KEY}`,
+           "Content-Type": "application/json",
+         },
+         body: JSON.stringify({
+           model: "google/gemini-3-flash-preview",
+           messages: [
+             { role: "system", content: systemPrompt },
+             ...enrichedMessages.map(m => ({ role: m.role, content: m.content })),
+           ],
+           stream: true,
+         }),
+       });
+     }
+ 
+     if (!response!.ok) {
+       const errorText = await response!.text();
+       console.error(`AI Gateway error: ${response!.status}`, errorText);
+       
+       if (response!.status === 429) {
+         return new Response(
+           JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
+           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+         );
+       }
+       
+       if (response!.status === 402) {
+         return new Response(
+           JSON.stringify({ error: "AI credits exhausted. Please contact support." }),
+           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+         );
+       }
+       
+       return new Response(
+         JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }),
+         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+       );
+     }
+ 
+     // Transform Gemini SSE to OpenAI-compatible format if using Gemini
+     if (usedGemini && response!.body) {
+       const reader = response!.body.getReader();
+       const encoder = new TextEncoder();
+       const decoder = new TextDecoder();
+       
+       const transformStream = new ReadableStream({
+         async start(controller) {
+           let buffer = "";
+           
+           try {
+             while (true) {
+               const { done, value } = await reader.read();
+               if (done) {
+                 controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                 controller.close();
+                 break;
+               }
+               
+               buffer += decoder.decode(value, { stream: true });
+               const lines = buffer.split("\n");
+               buffer = lines.pop() || "";
+               
+               for (const line of lines) {
+                 if (line.startsWith("data: ")) {
+                   const jsonStr = line.slice(6).trim();
+                   if (!jsonStr || jsonStr === "[DONE]") continue;
+                   
+                   try {
+                     const geminiData = JSON.parse(jsonStr);
+                     const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                     
+                     if (text) {
+                       const openAIFormat = {
+                         choices: [{
+                           delta: { content: text },
+                           index: 0,
+                         }],
+                       };
+                       controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAIFormat)}\n\n`));
+                     }
+                   } catch {
+                     // Skip malformed JSON
+                   }
+                 }
+               }
+             }
+           } catch (error) {
+             console.error("Stream transform error:", error);
+             controller.error(error);
+           }
+         },
+       });
+       
+       return new Response(transformStream, {
+         headers: {
+           ...corsHeaders,
+           "Content-Type": "text/event-stream",
+           "Cache-Control": "no-cache",
+           "Connection": "keep-alive",
+         },
+       });
+     }
+ 
+     // Stream Lovable AI response directly
+     return new Response(response!.body, {
+       headers: {
+         ...corsHeaders,
+         "Content-Type": "text/event-stream",
+         "Cache-Control": "no-cache",
+         "Connection": "keep-alive",
+       },
+     });
 
   } catch (error) {
     console.error("AI Mentor error:", error);

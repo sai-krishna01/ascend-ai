@@ -16,7 +16,8 @@ import Contact from "./pages/Contact";
 import GroupChats from "./pages/GroupChats";
 import AITools from "./pages/AITools";
 import Pricing from "./pages/Pricing";
-import NotFound from "./pages/NotFound";
+ import NotFound from "./pages/NotFound";
+ import CustomPage from "./pages/CustomPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,8 +74,11 @@ const App = () => (
               </ProtectedRoute>
             } />
             
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+             {/* Custom pages route */}
+             <Route path="/p/:slug" element={<CustomPage />} />
+             
+             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+             <Route path="*" element={<NotFound />} />
           </Routes>
         </MaintenanceWrapper>
       </BrowserRouter>

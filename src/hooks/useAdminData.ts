@@ -45,88 +45,74 @@ export function useAdminData() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchData = useCallback(async () => {
-    try {
-      // Fetch platform settings
-      const { data: settingsData } = await supabase
-        .from("platform_settings")
-        .select("*");
-      
-      if (settingsData) {
-        setSettings(settingsData as PlatformSetting[]);
-      }
-
-      // Fetch custom pages
-      const { data: pagesData } = await supabase
-        .from("custom_pages")
-        .select("*");
-      
-      if (pagesData) {
-        setPages(pagesData as CustomPage[]);
-      }
-
-      // Fetch system alerts
-      const { data: alertsData } = await supabase
-        .from("system_alerts")
-        .select("*")
-        .order("created_at", { ascending: false });
-      
-      if (alertsData) {
-        setAlerts(alertsData as SystemAlert[]);
-      }
-
-      // Fetch users with profiles and roles
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("*");
-      
-      if (profilesData) {
-        // Fetch roles for each user
-        const usersWithRoles = await Promise.all(
-          profilesData.map(async (profile) => {
-            const { data: roleData } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", profile.user_id)
-              .maybeSingle();
-            
-            return {
-              ...profile,
-              role: roleData?.role || "student"
-            };
-          })
-        );
-        setUsers(usersWithRoles);
-        setStats(prev => ({ ...prev, totalUsers: usersWithRoles.length }));
-      }
-
-      // Fetch session count
-      const { count: sessionCount } = await supabase
-        .from("chat_sessions")
-        .select("*", { count: "exact", head: true });
-      
-      if (sessionCount !== null) {
-        setStats(prev => ({ ...prev, totalSessions: sessionCount }));
-      }
-
-      // Fetch today's active sessions
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { count: todayCount } = await supabase
-        .from("chat_sessions")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", today.toISOString());
-      
-      if (todayCount !== null) {
-        setStats(prev => ({ ...prev, activeToday: todayCount }));
-      }
-
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+   const fetchData = useCallback(async () => {
+     try {
+       // Parallel fetch for better performance
+       const [
+         { data: settingsData },
+         { data: pagesData },
+         { data: alertsData },
+         { data: profilesData },
+         { count: sessionCount },
+       ] = await Promise.all([
+         supabase.from("platform_settings").select("*"),
+         supabase.from("custom_pages").select("*"),
+         supabase.from("system_alerts").select("*").order("created_at", { ascending: false }),
+         supabase.from("profiles").select("*"),
+         supabase.from("chat_sessions").select("*", { count: "exact", head: true }),
+       ]);
+       
+       if (settingsData) {
+         setSettings(settingsData as PlatformSetting[]);
+       }
+ 
+       if (pagesData) {
+         setPages(pagesData as CustomPage[]);
+       }
+ 
+       if (alertsData) {
+         setAlerts(alertsData as SystemAlert[]);
+       }
+ 
+       if (profilesData) {
+         // Fetch all roles at once instead of per-user
+         const { data: rolesData } = await supabase
+           .from("user_roles")
+           .select("user_id, role");
+         
+         const rolesMap = new Map(rolesData?.map(r => [r.user_id, r.role]) || []);
+         
+         const usersWithRoles = profilesData.map((profile) => ({
+           ...profile,
+           role: rolesMap.get(profile.user_id) || "student"
+         }));
+         
+         setUsers(usersWithRoles);
+         setStats(prev => ({ ...prev, totalUsers: usersWithRoles.length }));
+       }
+ 
+       if (sessionCount !== null) {
+         setStats(prev => ({ ...prev, totalSessions: sessionCount }));
+       }
+ 
+       // Fetch today's active sessions
+       const today = new Date();
+       today.setHours(0, 0, 0, 0);
+       const { count: todayCount } = await supabase
+         .from("chat_sessions")
+         .select("*", { count: "exact", head: true })
+         .gte("created_at", today.toISOString());
+       
+       if (todayCount !== null) {
+         setStats(prev => ({ ...prev, activeToday: todayCount }));
+       }
+ 
+     } catch (error) {
+       console.error("Error fetching admin data:", error);
+     } finally {
+       setIsLoading(false);
+     }
+   }, []);
 
   const updateSetting = async (key: string, value: any) => {
     try {

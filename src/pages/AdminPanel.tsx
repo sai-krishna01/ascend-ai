@@ -151,9 +151,9 @@ export default function AdminPanel() {
               <AIControlPanel />
             </TabsContent>
 
-            <TabsContent value="pages">
-              <CustomPagesManager pages={pages} onUpdatePage={updatePage} />
-            </TabsContent>
+             <TabsContent value="pages">
+               <CustomPagesManager pages={pages} onUpdatePage={updatePage} onRefresh={refetch} />
+             </TabsContent>
 
             <TabsContent value="alerts">
               <AlertsManager 

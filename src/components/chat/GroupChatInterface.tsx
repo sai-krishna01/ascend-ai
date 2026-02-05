@@ -40,7 +40,8 @@ import {
 import { GroupMessage, useGroupMessages, useGroupChats } from "@/hooks/useGroupChats";
 import { useAIFeatures } from "@/hooks/useAIFeatures";
 import { useAuth } from "@/hooks/useAuth";
-import { useFileUpload, UploadedFile } from "@/hooks/useFileUpload";
+ import { useFileUpload, UploadedFile } from "@/hooks/useFileUpload";
+ import { useAISettings } from "@/hooks/useAISettings";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -56,7 +57,11 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
   const group = groups.find(g => g.id === groupId);
   const { messages, isLoading, sendMessage, sendAIMessage } = useGroupMessages(groupId);
   const { answerInGroupChat, isLoading: aiLoading } = useAIFeatures();
-  const { uploadFile, isUploading, getFileIcon, formatFileSize } = useFileUpload();
+   const { uploadFile, isUploading, getFileIcon, formatFileSize } = useFileUpload();
+   const { canUploadFiles, canUploadLinks } = useAISettings();
+ 
+   const fileUploadAllowed = canUploadFiles();
+   const linkUploadAllowed = canUploadLinks();
   
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -445,35 +450,41 @@ export function GroupChatInterface({ groupId, onBack, aiEnabled = true }: GroupC
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              onClick={handleShareLink}
-            >
-              <LinkIcon className="h-5 w-5" />
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".pdf,.doc,.docx,.txt,image/*"
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Paperclip className="h-5 w-5" />
-              )}
-            </Button>
+           <div className="flex items-center gap-2">
+             {linkUploadAllowed && (
+               <Button
+                 variant="ghost"
+                 size="icon"
+                 className="shrink-0"
+                 onClick={handleShareLink}
+               >
+                 <LinkIcon className="h-5 w-5" />
+               </Button>
+             )}
+             {fileUploadAllowed && (
+               <>
+                 <input
+                   type="file"
+                   ref={fileInputRef}
+                   onChange={handleFileUpload}
+                   accept=".pdf,.doc,.docx,.txt,image/*"
+                   className="hidden"
+                 />
+                 <Button
+                   variant="ghost"
+                   size="icon"
+                   className="shrink-0"
+                   onClick={() => fileInputRef.current?.click()}
+                   disabled={isUploading}
+                 >
+                   {isUploading ? (
+                     <Loader2 className="h-5 w-5 animate-spin" />
+                   ) : (
+                     <Paperclip className="h-5 w-5" />
+                   )}
+                 </Button>
+               </>
+             )}
             <Input
               ref={inputRef}
               placeholder={aiEnabled && group.ai_enabled ? "Type a message... (@AI for help)" : "Type a message..."}

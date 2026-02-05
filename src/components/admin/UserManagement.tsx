@@ -31,7 +31,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Users, RefreshCw, Loader2, Edit2, Shield, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+ import { toast } from "sonner";
+ 
+ // Create an edge function for admin user deletion would be better,
+ // but for now we do a proper cascade delete of user data
 import type { AppRole } from "@/lib/types";
 
 interface User {
@@ -155,36 +158,107 @@ export function UserManagement({ users, onRefresh }: UserManagementProps) {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!deleteUser) return;
-
-    setIsDeleting(true);
-    try {
-      // Delete user role first
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", deleteUser.user_id);
-
-      // Delete user profile
-      await supabase
-        .from("profiles")
-        .delete()
-        .eq("user_id", deleteUser.user_id);
-
-      // Note: We can't delete from auth.users directly from client
-      // The user will remain in auth but without profile/role
-      // For full deletion, you'd need an admin edge function
-      
-      toast.success("User removed from platform");
-      setDeleteUser(null);
-      onRefresh();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete user");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+   const handleDeleteUser = async () => {
+     if (!deleteUser) return;
+ 
+     setIsDeleting(true);
+     try {
+       const userId = deleteUser.user_id;
+       
+       // Delete all user-related data in parallel where possible
+       // First, delete items that have foreign key dependencies
+       
+       // Delete chat messages from user's sessions
+       const { data: sessions } = await supabase
+         .from("chat_sessions")
+         .select("id")
+         .eq("user_id", userId);
+       
+       if (sessions && sessions.length > 0) {
+         const sessionIds = sessions.map(s => s.id);
+         await supabase
+           .from("chat_messages")
+           .delete()
+           .in("session_id", sessionIds);
+       }
+       
+       // Delete user's chat sessions
+       await supabase
+         .from("chat_sessions")
+         .delete()
+         .eq("user_id", userId);
+       
+       // Delete group chat memberships
+       await supabase
+         .from("group_chat_members")
+         .delete()
+         .eq("user_id", userId);
+       
+       // Delete AI interactions
+       await supabase
+         .from("ai_interactions")
+         .delete()
+         .eq("user_id", userId);
+       
+       // Delete learning progress
+       await supabase
+         .from("learning_progress")
+         .delete()
+         .eq("user_id", userId);
+       
+       // Delete shared notes
+       await supabase
+         .from("shared_notes")
+         .delete()
+         .eq("created_by", userId);
+       
+       // Delete study resources
+       await supabase
+         .from("study_resources")
+         .delete()
+         .eq("uploaded_by", userId);
+       
+       // Delete user subscriptions
+       await supabase
+         .from("user_subscriptions")
+         .delete()
+         .eq("user_id", userId);
+       
+       // Delete user role
+       const { error: roleError } = await supabase
+         .from("user_roles")
+         .delete()
+         .eq("user_id", userId);
+       
+       if (roleError) {
+         console.error("Error deleting role:", roleError);
+       }
+ 
+       // Delete user profile
+       const { error: profileError } = await supabase
+         .from("profiles")
+         .delete()
+         .eq("user_id", userId);
+       
+       if (profileError) {
+         console.error("Error deleting profile:", profileError);
+         throw profileError;
+       }
+ 
+       // Note: We can't delete from auth.users directly from client
+       // The user will remain in auth but without profile/role
+       // They won't be able to use the platform anymore
+       
+       toast.success("User completely removed from platform");
+       setDeleteUser(null);
+       onRefresh();
+     } catch (error: any) {
+       console.error("Delete user error:", error);
+       toast.error(error.message || "Failed to delete user");
+     } finally {
+       setIsDeleting(false);
+     }
+   };
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
