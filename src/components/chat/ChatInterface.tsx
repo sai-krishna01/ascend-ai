@@ -4,7 +4,8 @@ import { Send, Loader2, Trash2, Sparkles, History, X, Paperclip, Link2, FileText
 import { Button } from "@/components/ui/button";
 import { usePersistentChat } from "@/hooks/usePersistentChat";
 import { useChatSessions } from "@/hooks/useChatSessions";
-import { useFileUpload } from "@/hooks/useFileUpload";
+ import { useFileUpload } from "@/hooks/useFileUpload";
+ import { useAISettings } from "@/hooks/useAISettings";
 import { AIMode, UserLevel, AI_MODES, USER_LEVELS } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import ReactMarkdown from "react-markdown";
@@ -60,8 +61,12 @@ export function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isAuthenticated } = useAuth();
-  const { uploadFile, isUploading } = useFileUpload();
+   const { isAuthenticated } = useAuth();
+   const { uploadFile, isUploading } = useFileUpload();
+   const { canUploadFiles, canUploadLinks } = useAISettings();
+ 
+   const fileUploadAllowed = canUploadFiles();
+   const linkUploadAllowed = canUploadLinks();
 
   const { messages, isLoading, sendMessage, clearChat, isInitialized } = usePersistentChat({
     mode,
@@ -441,36 +446,39 @@ export function ChatInterface({
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-3 sm:p-4 border-t bg-background/50">
         <div className="flex gap-2">
-          {/* Attachment buttons */}
-          <div className="flex gap-1 shrink-0">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 sm:h-12 sm:w-12"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              title="Attach file"
-            >
-              {isUploading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Paperclip className="w-4 h-4" />
-              )}
-            </Button>
-            
-            <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 sm:h-12 sm:w-12"
-                  title="Add link"
-                >
-                  <Link2 className="w-4 h-4" />
-                </Button>
-              </DialogTrigger>
+           {/* Attachment buttons - only show if enabled */}
+           <div className="flex gap-1 shrink-0">
+             {fileUploadAllowed && (
+               <Button
+                 type="button"
+                 variant="ghost"
+                 size="icon"
+                 className="h-11 w-11 sm:h-12 sm:w-12"
+                 onClick={() => fileInputRef.current?.click()}
+                 disabled={isUploading}
+                 title="Attach file"
+               >
+                 {isUploading ? (
+                   <Loader2 className="w-4 h-4 animate-spin" />
+                 ) : (
+                   <Paperclip className="w-4 h-4" />
+                 )}
+               </Button>
+             )}
+             
+             {linkUploadAllowed && (
+               <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+                 <DialogTrigger asChild>
+                   <Button
+                     type="button"
+                     variant="ghost"
+                     size="icon"
+                     className="h-11 w-11 sm:h-12 sm:w-12"
+                     title="Add link"
+                   >
+                     <Link2 className="w-4 h-4" />
+                   </Button>
+                 </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Add Link</DialogTitle>
@@ -499,7 +507,8 @@ export function ChatInterface({
                   </Button>
                 </div>
               </DialogContent>
-            </Dialog>
+               </Dialog>
+             )}
           </div>
 
           <textarea
